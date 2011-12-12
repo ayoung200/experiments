@@ -5,7 +5,7 @@
 #ifndef ADL_ERROR_H
 #define ADL_ERROR_H
 
-#if defined(ADL_DUMP_DX11_ERROR)
+#if defined(__WINDOWS__) && defined(ADL_DUMP_DX11_ERROR)
 	#include <windows.h>
 #endif
 #ifdef _DEBUG

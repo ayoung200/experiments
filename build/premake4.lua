@@ -102,7 +102,7 @@ end
 	include "../dynamics/basic_demo"
 	
 	include "../dynamics/CDTestFramework"
-	include "../dynamics/CDTestFramework/opcode"
+	include "../dynamics/CDTestFramework/Opcode"
 	include "../dynamics/CDTestFramework/AntTweakBar/src"
 	
 

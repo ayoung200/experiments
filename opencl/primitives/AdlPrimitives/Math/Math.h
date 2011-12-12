@@ -19,8 +19,12 @@
 #define PI       3.14159265358979323846f
 #define NEXTMULTIPLEOF(num, alignment) (((num)/(alignment) + (((num)%(alignment)==0)?0:1))*(alignment))
 
+#if defined(__WINDOWS__)
+    #define _MEM_CLASSALIGN16 __declspec(align(16))
+#else
+    #define _MEM_CLASSALIGN16 __attribute__((aligned(16)));
+#endif
 
-#define _MEM_CLASSALIGN16 __declspec(align(16))
 #define _MEM_ALIGNED_ALLOCATOR16 	void* operator new(size_t size) { return _aligned_malloc( size, 16 ); } \
 	void operator delete(void *p) { _aligned_free( p ); } \
 	void* operator new[](size_t size) { return _aligned_malloc( size, 16 ); } \

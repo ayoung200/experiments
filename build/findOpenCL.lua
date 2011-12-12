@@ -53,9 +53,11 @@
 				"$(CUDA_PATH)/include"				
 			}
 			configuration "x32"
-				libdirs {"$(CUDA_PATH)/lib/Win32"}
+				-- libdirs {"$(CUDA_PATH)/lib/Win32"}
+				libdirs {"/usr/lib"}
 			configuration "x64"
-				libdirs {"$(CUDA_PATH)/lib/x64"}
+				-- libdirs {"$(CUDA_PATH)/libx64"}
+				libdirs {"/usr/lib64"}
 			configuration {}
 			links {"OpenCL"}
 			return true

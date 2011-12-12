@@ -1,8 +1,9 @@
 /*
 		2011 Takahiro Harada
 */
-
-#include <windows.h>
+#ifdef __WINDOWS__ 
+    #include <windows.h>
+#endif
 
 namespace adl
 {

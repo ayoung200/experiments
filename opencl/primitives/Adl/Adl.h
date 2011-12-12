@@ -9,6 +9,7 @@
 #include <Adl/AdlConfig.h>
 #include <Adl/AdlError.h>
 #include <algorithm>
+#include <string.h> //needed for memcpy on non-windows systems -ASY 12/11/2011
 
 #ifndef max
 #define max(a,b)            (((a) > (b)) ? (a) : (b))
@@ -125,14 +126,14 @@ struct Buffer : public BufferBase
 	__inline
 	Buffer();
 	__inline
-	Buffer(const Device* device, int nElems, BufferType type = BUFFER );
+	Buffer(const Device* device, int nElems, BufferType type = BufferBase::BUFFER );
 	__inline
 	virtual ~Buffer();
 	
 	__inline
-	void setRawPtr( const Device* device, T* ptr, int size, BufferType type = BUFFER );
+	void setRawPtr( const Device* device, T* ptr, int size, BufferType type = BufferBase::BUFFER );
 	__inline
-	void allocate(const Device* device, int nElems, BufferType type = BUFFER );
+	void allocate(const Device* device, int nElems, BufferType type = BufferBase::BUFFER );
 	__inline
 	void write(T* hostSrcPtr, int nElems, int dstOffsetNElems = 0);
 	__inline
@@ -183,7 +184,7 @@ struct HostBuffer : public Buffer<T>
 	__inline
 	HostBuffer():Buffer<T>(){}
 	__inline
-	HostBuffer(const Device* device, int nElems, BufferType type = BUFFER ) : Buffer<T>(device, nElems, type) {}
+	HostBuffer(const Device* device, int nElems, BufferType type = BufferBase::BUFFER ) : Buffer<T>(device, nElems, type) {}
 //	HostBuffer(const Device* deviceData, T* rawPtr, int nElems);
 
 
