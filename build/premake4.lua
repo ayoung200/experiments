@@ -66,7 +66,7 @@ end
 	
 
 	include "../bullet2"	
-	include "../jpeglib"
+	--include "../jpeglib"
 
 	
 
@@ -112,13 +112,13 @@ end
 	include "../dynamics/position_based_dynamics"
 	include "../dynamics/basic_demo"
 	
-	include "../dynamics/corotational_fem"
+	--include "../dynamics/corotational_fem"
 	--include "../dynamics/nncg_test"
 
 	include "../rendering/Gwen/Gwen"
 	include "../rendering/Gwen/GwenOpenGLTest"
 	include "../rendering/OpenGLES2Angle"
 else
-	include "../rendering/NativeClient"	
+	--include "../rendering/NativeClient"	
 	
 end

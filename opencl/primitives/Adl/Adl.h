@@ -18,17 +18,18 @@ subject to the following restrictions:
 #define ADL_H
 
 #pragma warning( disable : 4996 )
+
 #include <Adl/AdlConfig.h>
 #include <Adl/AdlError.h>
 #include <algorithm>
-#include <string.h> //needed for memcpy on non-windows systems -ASY 12/11/2011
-
+#ifdef _MSVC_
 #ifndef max
 #define max(a,b)            (((a) > (b)) ? (a) : (b))
 #endif
 
 #ifndef min
 #define min(a,b)            (((a) < (b)) ? (a) : (b))
+#endif
 #endif
 
 namespace adl
@@ -131,8 +132,8 @@ struct Device
 //	Buffer
 //==========================
 
-template<typename T>
-struct HostBuffer;
+//template<typename T>
+//struct HostBuffer;
 //	overload each deviceDatas
 template<typename T>
 struct Buffer : public BufferBase
@@ -179,7 +180,7 @@ public:
 	template<DeviceType TYPE, bool COPY, typename T>
 	__inline
 	static
-	typename Buffer<T>* map(const Device* device, const Buffer<T>* in, int copySize = -1);
+	Buffer<T>* map(const Device* device, const Buffer<T>* in, int copySize = -1);
 
 	template<bool COPY, typename T>
 	__inline
@@ -198,7 +199,7 @@ struct HostBuffer : public Buffer<T>
 	__inline
 	HostBuffer():Buffer<T>(){}
 	__inline
-	HostBuffer(const Device* device, int nElems, BufferType type = BufferBase::BUFFER ) : Buffer<T>(device, nElems, type) {}
+	HostBuffer(const Device* device, int nElems, BufferBase::BufferType type = BufferBase::BUFFER ) : Buffer<T>(device, nElems, type) {}
 //	HostBuffer(const Device* deviceData, T* rawPtr, int nElems);
 
 

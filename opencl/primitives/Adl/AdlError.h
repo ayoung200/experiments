@@ -19,6 +19,8 @@ subject to the following restrictions:
 
 #if defined(__WINDOWS__) && defined(ADL_DUMP_DX11_ERROR)
 	#include <windows.h>
+#else 
+	#include <string.h> //used for memcpy on non-windows os.
 #endif
 #ifdef _DEBUG
 	#include <assert.h>

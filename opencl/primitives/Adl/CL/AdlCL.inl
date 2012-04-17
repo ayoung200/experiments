@@ -194,7 +194,7 @@ USE_NV_GPU:
 		status = clGetDeviceIDs( platform, deviceType, numDevice, deviceIds, NULL );
 		ADLASSERT( status == CL_SUCCESS );
 
-		{	int i = min( (int)numDevice-1, cfg.m_deviceIdx );
+		{	int i = std::min( (int)numDevice-1, cfg.m_deviceIdx );//use min in algorithms to avoid problems with redefinition of min on gcc -ASY 04/15/2012
 			m_deviceIdx = deviceIds[i];
 			deviceData->m_context = clCreateContext( NULL, 1, &deviceData->m_deviceIdx, NULL, NULL, &status );
 			ADLASSERT( status == CL_SUCCESS );

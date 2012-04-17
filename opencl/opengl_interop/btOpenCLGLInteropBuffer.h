@@ -18,7 +18,7 @@ subject to the following restrictions:
 #ifndef BT_OPENCL_GL_INTEROP_BUFFER_H
 #define BT_OPENCL_GL_INTEROP_BUFFER_H
 
-#include "btGlutInclude.h"
+#include "../../rendering/GlutGlewWindows/btGlutInclude.h"
 
 #include "../basic_initialize/btOpenCLInclude.h"
 

@@ -25,7 +25,7 @@
 #include <GL/glew.h>
 #include <stdio.h>
 
-#include "btGlutInclude.h"
+#include "../../rendering/GlutGlewWindows/btGlutInclude.h"
 #include "../opengl_interop/btStopwatch.h"
 
 

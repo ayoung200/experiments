@@ -14,7 +14,10 @@ subject to the following restrictions:
 //Originally written by Takahiro Harada
 
 
-
+#ifndef _MSVC_
+#include <sys/stat.h>
+#define sprintf_s(buffer, stringbuffer, ...) (sprintf(buffer, stringbuffer, __VA_ARGS__))
+#endif
 
 
 namespace adl
@@ -39,21 +42,28 @@ static const char* strip(const char* name, const char* pattern)
 	  return oriptr;
 }
 
+
 static bool isFileUpToDate(const char* binaryFileName,const char* srcFileName)
 
 {
 	bool fileUpToDate = false;
 
 	bool binaryFileValid=false;
-	FILETIME modtimeBinary; 
+	#ifdef _MSVC_
+		FILETIME modtimeBinary;
+	#else
+		int modtimeBinary; 
+	#endif
 
 	int nameLength = (int)strlen(binaryFileName)+1;
+#ifdef _MSVC_
 #ifdef UNICODE
 	WCHAR* fName = new WCHAR[nameLength];
 	MultiByteToWideChar(CP_ACP,0,binaryFileName,-1, fName, nameLength);
 	HANDLE binaryFileHandle = CreateFile(fName,GENERIC_READ,0,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0);
 	delete [] fName;
 #else
+	
 	HANDLE binaryFileHandle = CreateFile(binaryFileName,GENERIC_READ,0,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0);
 #endif
 	if (binaryFileHandle ==INVALID_HANDLE_VALUE)
@@ -90,9 +100,22 @@ static bool isFileUpToDate(const char* binaryFileName,const char* srcFileName)
 		}
 		CloseHandle(binaryFileHandle);
 	}
+#else
+    struct stat st;
+    int ierr = stat (binaryFileName, &st);
+    if (ierr == 0) {
+        modtimeBinary = st.st_mtime;
+        if(modtimeBinary!=0)
+            binaryFileValid=true;
+    }
+    else
+        debugPrintf("filetime errcode=%d\n",ierr);
+#endif
+
 
 	if (binaryFileValid)
 	{
+#ifdef _MSVC_
 #ifdef UNICODE
 		int nameLength = (int)strlen(srcFileName)+1;
 		WCHAR* fName = new WCHAR[nameLength];
@@ -149,8 +172,19 @@ static bool isFileUpToDate(const char* binaryFileName,const char* srcFileName)
 			fileUpToDate = true;
 #endif
 		}
+#else
+    struct stat st;
+    int ierr = stat (srcFileName, &st);
+    if (ierr == 0) {
+        int modtimeSrc = st.st_mtime;
+        if(modtimeSrc<modtimeBinary)
+	    fileUpToDate=true;	
+    }
+    else
+        debugPrintf("filetime errcode=%d\n",ierr);
+#endif
+
 	}
-			
 
 	return fileUpToDate;
 }
@@ -527,9 +561,9 @@ void LauncherCL::launch2D( Launcher* launcher, int numThreadsX, int numThreadsY,
 	size_t lRange[3] = {1,1,1};
 	lRange[0] = localSizeX;
 	lRange[1] = localSizeY;
-	gRange[0] = max((size_t)1, (numThreadsX/lRange[0])+(!(numThreadsX%lRange[0])?0:1));
+	gRange[0] = std::max((size_t)1, (numThreadsX/lRange[0])+(!(numThreadsX%lRange[0])?0:1));
 	gRange[0] *= lRange[0];
-	gRange[1] = max((size_t)1, (numThreadsY/lRange[1])+(!(numThreadsY%lRange[1])?0:1));
+	gRange[1] = std::max((size_t)1, (numThreadsY/lRange[1])+(!(numThreadsY%lRange[1])?0:1));
 	gRange[1] *= lRange[1];
 
 	cl_int status = clEnqueueNDRangeKernel( ddcl->m_commandQueue, 
