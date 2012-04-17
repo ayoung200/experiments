@@ -1,11 +1,26 @@
 
+/*
+Copyright (c) 2012 Advanced Micro Devices, Inc.  
+
+This software is provided 'as-is', without any express or implied warranty.
+In no event will the authors be held liable for any damages arising from the use of this software.
+Permission is granted to anyone to use this software for any purpose, 
+including commercial applications, and to alter it and redistribute it freely, 
+subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+*/
+//Originally written by Erwin Coumans
+
 //starts crashing when more than 32700 objects on my Geforce 260, unless _USE_SUB_DATA is defined (still unstable though)
 //runs fine with fewer objects
 
-#define NUM_OBJECTS_X 32
+#define NUM_OBJECTS_X 42
 //327
-#define NUM_OBJECTS_Y 32
-#define NUM_OBJECTS_Z 16
+#define NUM_OBJECTS_Y 42
+#define NUM_OBJECTS_Z 42
 //#define NUM_OBJECTS_Z 20
 
 //#define _USE_SUB_DATA
@@ -101,18 +116,18 @@ cl_mem				gLinVelMem;
 cl_mem				gAngVelMem;
 cl_mem				gBodyTimes;
 
-btVector3 m_cameraPosition(142,120,142);
+btVector3 m_cameraPosition(142,220,142);
 btVector3 m_cameraTargetPosition(0,-30,0);
-btScalar m_cameraDistance = 30;
+btScalar m_cameraDistance = 200;
 btVector3 m_cameraUp(0,1,0);
-float m_azi=0.f;
+float m_azi=-50.f;
 float m_ele=0.f;
 
 
 
 
 btOpenCLGLInteropBuffer* g_interopBuffer = 0;
-cl_kernel g_interopKernel;
+cl_kernel g_sineWaveKernel;
 
 
 
@@ -652,8 +667,6 @@ void InitCL()
 	if (numDev>0)
 	{
 		g_device= btOpenCLUtils::getDevice(g_cxMainContext,0);
-		btOpenCLDeviceInfo clInfo;
-		btOpenCLUtils::getDeviceInfo(g_device,clInfo);
 		btOpenCLUtils::printDeviceInfo(g_device);
 		// create a command-queue
 		g_cqCommandQue = clCreateCommandQueue(g_cxMainContext, g_device, 0, &ciErrNum);
@@ -692,7 +705,7 @@ void InitShaders()
 	
 	btOverlappingPairCache* overlappingPairCache=0;
 #ifdef	USE_NEW
-	sBroadphase = new btGridBroadphaseCl(overlappingPairCache,btVector3(10.f, 10.f, 10.f), 32, 32, 32,NUM_OBJECTS, NUM_OBJECTS, 64, 100.f, 16,
+	sBroadphase = new btGridBroadphaseCl(overlappingPairCache,btVector3(3.f, 3.f, 3.f), 32, 32, 32,NUM_OBJECTS, NUM_OBJECTS, 64, 100.f, 16,
 		g_cxMainContext ,g_device,g_cqCommandQue);
 #else
 	sBroadphase = new btGpu3DGridBroadphase(btVector3(10.f, 10.f, 10.f), 32, 32, 32,NUM_OBJECTS, NUM_OBJECTS, 64, 100.f, 16);
@@ -1104,20 +1117,20 @@ void updatePos()
 			int numObjects = NUM_OBJECTS;
 			int offset = (sizeof(cube_vertices) )/4;
 
-			ciErrNum = clSetKernelArg(g_interopKernel, 0, sizeof(int), &offset);
-			ciErrNum = clSetKernelArg(g_interopKernel, 1, sizeof(int), &numObjects);
-			ciErrNum = clSetKernelArg(g_interopKernel, 2, sizeof(cl_mem), (void*)&clBuffer );
+			ciErrNum = clSetKernelArg(g_sineWaveKernel, 0, sizeof(int), &offset);
+			ciErrNum = clSetKernelArg(g_sineWaveKernel, 1, sizeof(int), &numObjects);
+			ciErrNum = clSetKernelArg(g_sineWaveKernel, 2, sizeof(cl_mem), (void*)&clBuffer );
 
-			ciErrNum = clSetKernelArg(g_interopKernel, 3, sizeof(cl_mem), (void*)&gLinVelMem);
-			ciErrNum = clSetKernelArg(g_interopKernel, 4, sizeof(cl_mem), (void*)&gAngVelMem);
-			ciErrNum = clSetKernelArg(g_interopKernel, 5, sizeof(cl_mem), (void*)&gBodyTimes);
+			ciErrNum = clSetKernelArg(g_sineWaveKernel, 3, sizeof(cl_mem), (void*)&gLinVelMem);
+			ciErrNum = clSetKernelArg(g_sineWaveKernel, 4, sizeof(cl_mem), (void*)&gAngVelMem);
+			ciErrNum = clSetKernelArg(g_sineWaveKernel, 5, sizeof(cl_mem), (void*)&gBodyTimes);
 			
 			
 			
 
 		
-			size_t	numWorkItems = NUM_OBJECTS;//workGroupSize*((NUM_OBJECTS + (workGroupSize)) / workGroupSize);
-			ciErrNum = clEnqueueNDRangeKernel(g_cqCommandQue, g_interopKernel, 1, NULL, &numWorkItems, &workGroupSize,0 ,0 ,0);
+			size_t	numWorkItems = workGroupSize*((NUM_OBJECTS + (workGroupSize)) / workGroupSize);
+			ciErrNum = clEnqueueNDRangeKernel(g_cqCommandQue, g_sineWaveKernel, 1, NULL, &numWorkItems, &workGroupSize,0 ,0 ,0);
 			oclCHECKERROR(ciErrNum, CL_SUCCESS);
 		}
 	
@@ -1226,15 +1239,15 @@ void	broadphase()
 			gFpIO.m_positionOffset = (sizeof(cube_vertices) )/4;
 			gFpIO.m_clObjectsBuffer = clBuffer;
 			gFpIO.m_dAABB = sBroadphase->m_dAABB;
-			findPairsOpenCL(gFpIO);
+			setupGpuAabbsSimple(gFpIO);
 
 			sBroadphase->calculateOverlappingPairs(0, NUM_OBJECTS);
 
 
-			gFpIO.m_dPairsChangedXY = sBroadphase->m_dPairsChangedXY;
+			gFpIO.m_dAllOverlappingPairs = sBroadphase->m_dAllOverlappingPairs;
 			gFpIO.m_numOverlap = sBroadphase->m_numPrefixSum;
 
-			drawPairsOpenCL(gFpIO);
+			colorPairsOpenCL(gFpIO);
 
 		}
 	
@@ -1384,7 +1397,7 @@ void ChangeSize(int w, int h)
 
 #ifdef RECREATE_CL_AND_SHADERS_ON_RESIZE
 	delete g_interopBuffer;
-	clReleaseKernel(g_interopKernel);
+	clReleaseKernel(g_sineWaveKernel);
 	releaseFindPairs(fpio);
 	DeleteCL();
 	DeleteShaders();
@@ -1399,7 +1412,7 @@ void ChangeSize(int w, int h)
 	
 	g_interopBuffer = new btOpenCLGLInteropBuffer(g_cxMainContext,g_cqCommandQue,cube_vbo);
 	clFinish(g_cqCommandQue);
-	g_interopKernel = btOpenCLUtils::compileCLKernelFromString(g_cxMainContext, interopKernelString, "interopKernel" );
+	g_sineWaveKernel = btOpenCLUtils::compileCLKernelFromString(g_cxMainContext, interopKernelString, "interopKernel" );
 	initFindPairs(...);
 #endif //RECREATE_CL_AND_SHADERS_ON_RESIZE
 
@@ -1468,7 +1481,7 @@ int main(int argc, char* argv[])
 
 	glutInitWindowSize(m_glutScreenWidth, m_glutScreenHeight);
 	char buf[1024];
-	sprintf(buf,"OpenCL - OpenGL interop, transforms %d cubes on the GPU (use c to toggle CPU/CL)", NUM_OBJECTS);
+	sprintf(buf,"OpenCL broadphase benchmark, %d cubes on the GPU", NUM_OBJECTS);
 	glutCreateWindow(buf);
 
 	glutReshapeFunc(ChangeSize);
@@ -1521,7 +1534,7 @@ int main(int argc, char* argv[])
 	{
 		linVelHost[i].setValue(0,0,0);
 		angVelHost[i].setValue(1,0,0);
-		bodyTimesHost[i] = double(randrange(0x2fffffff))/double(0x2fffffff)*float(1024);//NUM_OBJECTS);
+		bodyTimesHost[i] = i*(1024.f/NUM_OBJECTS);//double(randrange(0x2fffffff))/double(0x2fffffff)*float(1024);//NUM_OBJECTS);
 	}
 
 	linvelBuf.write(linVelHost,NUM_OBJECTS);
@@ -1537,7 +1550,7 @@ int main(int argc, char* argv[])
 	clFinish(g_cqCommandQue);
 
 
-	g_interopKernel = btOpenCLUtils::compileCLKernelFromString(g_cxMainContext, g_device,interopKernelString, "interopKernel" );
+	g_sineWaveKernel = btOpenCLUtils::compileCLKernelFromString(g_cxMainContext, g_device,interopKernelString, "sineWaveKernel" );
 	initFindPairs(gFpIO, g_cxMainContext, g_device, g_cqCommandQue, NUM_OBJECTS);
 
 	

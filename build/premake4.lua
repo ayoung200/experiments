@@ -53,9 +53,14 @@ else
 	location("./nacl")
 end
 
+	
+
+	projectRootDir = os.getcwd() .. "/../"
+	print("Project root directroy: " .. projectRootDir);
 
 	dofile ("findOpenCL.lua")
 	dofile ("findDirectX11.lua")
+	dofile ("findOpenGLGlewGlut.lua")
 	
 	language "C++"
 	
@@ -68,17 +73,23 @@ end
 	
 if not _OPTIONS["with-nacl"] then
 
+	include "../opencl/c_api"
+	include "../opencl/basic_initialize"
+	include "../opencl/vector_add"
+	include "../opencl/gui_initialize"
 	include "../opencl/opengl_interop"
+	include "../opencl/global_atomics"
 	include "../opencl/integration"
 	include "../opencl/primitives/AdlTest"
 	include "../opencl/primitives/benchmark"
 	include "../rendering/GLSL_Instancing"
-	include "../opencl/basic_initialize"
-	include "../opencl/gui_initialize"
 	include "../opencl/3dGridBroadphase"
-	include "../opencl/global_atomics"
 	include "../opencl/broadphase_benchmark"
+	include "../opencl/gpu_rigidbody_pipeline"
+	include "../opencl/gpu_rigidbody_pipeline2"
 	
+	--include "../dynamics/profiler_test"
+	--include "../Lua"
 	
 	
 if _OPTIONS["with-pe"] then
@@ -100,12 +111,6 @@ end
 	include "../dynamics/testbed"
 	include "../dynamics/position_based_dynamics"
 	include "../dynamics/basic_demo"
-	
-	include "../dynamics/CDTestFramework"
-	include "../dynamics/CDTestFramework/Opcode"
-	include "../dynamics/CDTestFramework/AntTweakBar/src"
-	
-
 	
 	include "../dynamics/corotational_fem"
 	--include "../dynamics/nncg_test"

@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
 	{
 		cl_platform_id platform = btOpenCLUtils::getPlatform(i);
 		btOpenCLPlatformInfo platformInfo;
-		btOpenCLUtils::getPlatformInfo(platform,platformInfo);
+		btOpenCLUtils::getPlatformInfo(platform,&platformInfo);
 		printf("--------------------------------\n");
 		printf("Platform info for platform nr %d:\n",i);
 		printf("  CL_PLATFORM_VENDOR: \t\t\t%s\n",platformInfo.m_platformVendor);
@@ -53,7 +53,7 @@ int main(int argc, char* argv[])
 		{
 			cl_device_id dev = btOpenCLUtils::getDevice(context,j);
 			btOpenCLDeviceInfo devInfo;
-			btOpenCLUtils::getDeviceInfo(dev,devInfo);
+			btOpenCLUtils::getDeviceInfo(dev,&devInfo);
 			btOpenCLUtils::printDeviceInfo(dev);
 		}
 
@@ -76,7 +76,7 @@ int main(int argc, char* argv[])
 		cl_device_id		device;
 		device = btOpenCLUtils::getDevice(g_cxMainContext,i);
 		btOpenCLDeviceInfo clInfo;
-		btOpenCLUtils::getDeviceInfo(device,clInfo);
+		btOpenCLUtils::getDeviceInfo(device,&clInfo);
 		btOpenCLUtils::printDeviceInfo(device);
 		// create a command-queue
 		g_cqCommandQue = clCreateCommandQueue(g_cxMainContext, device, 0, &ciErrNum);

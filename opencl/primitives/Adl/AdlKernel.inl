@@ -1,6 +1,19 @@
 /*
-		2011 Takahiro Harada
+Copyright (c) 2012 Advanced Micro Devices, Inc.  
+
+This software is provided 'as-is', without any express or implied warranty.
+In no event will the authors be held liable for any damages arising from the use of this software.
+Permission is granted to anyone to use this software for any purpose, 
+including commercial applications, and to alter it and redistribute it freely, 
+subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
 */
+//Originally written by Takahiro Harada
+
+
 
 #ifdef ADL_ENABLE_CL
 	#include <Adl/CL/AdlKernelUtilsCL.inl>
@@ -18,6 +31,7 @@ namespace adl
 Kernel* KernelManager::query(const Device* dd, const char* fileName, const char* funcName, const char* option, const char* src,
 	bool cacheKernel)
 {
+	printf("compiling kernel %s",funcName);
 	const int charSize = 1024*2;
 	KernelManager* s_kManager = this;
 
@@ -63,7 +77,13 @@ Kernel* KernelManager::query(const Device* dd, const char* fileName, const char*
 			{
 				KernelBuilder<TYPE_CL> builder;
 				if( src )
-					builder.setFromSrc( dd, src, option );
+					if (cacheKernel)
+					{
+						builder.setFromSrcCached( dd, src, fileName, option );
+					} else
+					{
+						builder.setFromSrc( dd, src, option );
+					}
 				else
 					builder.setFromFile( dd, fileName, option, true, cacheKernel );
 				builder.createKernel( funcName, *kernelOut );
@@ -93,6 +113,7 @@ Kernel* KernelManager::query(const Device* dd, const char* fileName, const char*
 		kernelOut = iter->second;
 	}
 
+	printf(" ready\n");
 	return kernelOut;
 }
 
@@ -106,11 +127,13 @@ KernelManager::~KernelManager()
 #if defined(ADL_ENABLE_CL)
 		case TYPE_CL:
 			KernelBuilder<TYPE_CL>::deleteKernel( *k );
+			delete k;
 			break;
 #endif
 #if defined(ADL_ENABLE_DX11)
 		case TYPE_DX11:
 			KernelBuilder<TYPE_DX11>::deleteKernel( *k );
+			delete k;
 			break;
 #endif
 		default:

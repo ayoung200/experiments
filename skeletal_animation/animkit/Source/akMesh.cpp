@@ -83,9 +83,16 @@ akSubMesh::~akSubMesh()
 	
 	delete m_material;
 }
+#include <stdio.h>
 
 UTuint32 akSubMesh::addVertex(const akVector3 &co, const akVector3 &no, const UTuint32 &color, utArray<float>& uv)
 {
+	float x,y,z;
+	x=co.getX();
+	y = co.getY();
+	z = co.getZ();
+
+	//printf("akVector3(%f,%f,%f),\n ",x,y,z);
 	m_posnor.push_back(co);
 	if(m_hasNormals)
 		m_posnor.push_back(no);
@@ -131,6 +138,7 @@ UTuint32 akSubMesh::addVertex(const akVector3 &co, const akVector3 &no, const UT
 
 void akSubMesh::addIndex(UTuint32 idx)
 {
+	//printf("%d,",idx);
 	m_elements.push_back(idx);
 	m_elementBuffer.setSize(m_elementBuffer.getSize()+1);
 	m_iBufDirty = true;
@@ -168,7 +176,8 @@ void akSubMesh::generateBoneWeightsFromVertexGroups(akSkeleton* skel, bool delet
 	
 	bonevgmap.resize(skel->getNumJoints(), -1);
 	weightmaplist.resize(skel->getNumJoints());
-	
+
+		
 	for (int w = 0; w < getNumVertexGroups(); w++)
 	{
 		akVertexGroup* vg = getVertexGroup(w);
@@ -360,8 +369,8 @@ void akSubMesh::deform(akGeometryDeformer::SkinningOption method,
 {
 	akVector3 *posin, *posout;
 	unsigned int posins, posouts;
-	akVector3 *norin, *norout;
-	unsigned int norins, norouts;
+	akVector3 *norin=0, *norout=0;
+	unsigned int norins=0, norouts=0;
 	
 	//be sure vbuf is up to date
 	getVertexBuffer();
@@ -428,8 +437,8 @@ void akSubMesh::deform(akGeometryDeformer::SkinningOption method,
 									 indices, indicess,
 									 posin, posins,
 									 posout, posouts,
-									 norin, norins,
-									 norout, norouts);
+									 m_hasNormals? norin:0, m_hasNormals? norins:0,
+									 m_hasNormals? norout:0, m_hasNormals? norouts:0);
 		
 	}
 }

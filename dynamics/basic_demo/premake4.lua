@@ -1,5 +1,5 @@
 
-include "AMD"
+-- include "AMD"
 
 if os.is("Windows") then
 	
@@ -23,20 +23,8 @@ if os.is("Windows") then
 			"gwen"
 		}
 		
-
-	
-		configuration { "Windows" }
- 		links { "glut32","glew32","opengl32" }
-		includedirs{	"../../rendering/GlutGlewWindows"	}
- 		libdirs {"../../rendering/GlutGlewWindows"}
-
-
-		configuration {"MacOSX"}
- 		links { "Carbon.framework","OpenGL.framework","AGL.framework","Glut.framework" } 
-		configuration {"not Windows", "not MacOSX"}
-		links {"GL","GLU","glut"}
-	
-		configuration{}
+		initOpenGL()
+		initGlut()
 	
 		files {
 		"**.cpp",

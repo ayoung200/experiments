@@ -1,6 +1,19 @@
 /*
-		2011 Takahiro Harada
+Copyright (c) 2012 Advanced Micro Devices, Inc.  
+
+This software is provided 'as-is', without any express or implied warranty.
+In no event will the authors be held liable for any damages arising from the use of this software.
+Permission is granted to anyone to use this software for any purpose, 
+including commercial applications, and to alter it and redistribute it freely, 
+subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
 */
+//Originally written by Takahiro Harada
+
+
 
 #pragma comment(lib,"OpenCL.lib")
 #include <CL/cl.h>
@@ -16,7 +29,7 @@ struct DeviceCL : public Device
 
 
 	__inline
-	DeviceCL() : Device( TYPE_CL ), m_kernelManager(0){}
+	DeviceCL() : Device( TYPE_CL ), m_kernelManager(0),m_ownsContextAndQueue(0){}
 	__inline
 	void* getContext() const { return m_context; }
 	__inline
@@ -68,7 +81,10 @@ struct DeviceCL : public Device
 
 	cl_device_id m_deviceIdx;
 
+	int	m_ownsContextAndQueue;
+
 	KernelManager* m_kernelManager;
+	
 };
 
 //===
@@ -76,6 +92,7 @@ struct DeviceCL : public Device
 
 void DeviceCL::initialize(const Config& cfg)
 {
+	m_ownsContextAndQueue = 1;
 //	DeviceUtils::create( cfg, (DeviceCL*)this );
 	{
 //		dd = new DeviceCL();
@@ -209,9 +226,11 @@ USE_NV_GPU:
 
 void DeviceCL::release()
 {
-	clReleaseCommandQueue( m_commandQueue );
-	clReleaseContext( m_context );
-
+	if (m_ownsContextAndQueue)
+	{
+		clReleaseCommandQueue( m_commandQueue );
+		clReleaseContext( m_context );
+	}
 	if( m_kernelManager ) delete m_kernelManager;
 }
 
@@ -231,13 +250,15 @@ void DeviceCL::allocate(Buffer<T>* buf, int nElems, BufferBase::BufferType type)
 	fflush( stdout );
 #endif
 
+	int sz=sizeof(T)*nElems;
+
 	cl_int status = 0;
 	if( type == BufferBase::BUFFER_ZERO_COPY )
-		buf->m_ptr = (T*)clCreateBuffer( m_context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, sizeof(T)*nElems, 0, &status );
+		buf->m_ptr = (T*)clCreateBuffer( m_context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, sz, 0, &status );
 	else if( type == BufferBase::BUFFER_RAW )
-		buf->m_ptr = (T*)clCreateBuffer( m_context, CL_MEM_WRITE_ONLY, sizeof(T)*nElems, 0, &status );
+		buf->m_ptr = (T*)clCreateBuffer( m_context, CL_MEM_WRITE_ONLY, sz, 0, &status );
 	else
-		buf->m_ptr = (T*)clCreateBuffer( m_context, CL_MEM_READ_WRITE, sizeof(T)*nElems, 0, &status );
+		buf->m_ptr = (T*)clCreateBuffer( m_context, CL_MEM_READ_WRITE, sz, 0, &status );
 
 	m_memoryUsage += buf->m_size*sizeof(T);
 #if defined(ADL_CL_DUMP_MEMORY_LOG)
@@ -263,7 +284,7 @@ void DeviceCL::deallocate(Buffer<T>* buf)
 template<typename T>
 void DeviceCL::copy(Buffer<T>* dst, const Buffer<T>* src, int nElems,int srcOffsetNElems,int dstOffsetNElems )
 {
-	if( dst->m_device->m_type == TYPE_CL || src->m_device->m_type == TYPE_CL )
+	if( dst->m_device->m_type == TYPE_CL && src->m_device->m_type == TYPE_CL )
 	{
 		cl_int status = 0;
 		status = clEnqueueCopyBuffer( m_commandQueue, (cl_mem)src->m_ptr, (cl_mem)dst->m_ptr, sizeof(T)*srcOffsetNElems, sizeof(T)*dstOffsetNElems, sizeof(T)*nElems, 0, 0, 0 );
@@ -298,7 +319,8 @@ template<typename T>
 void DeviceCL::copy(Buffer<T>* dst, const T* src, int nElems, int dstOffsetNElems )
 {
 	cl_int status = 0;
-	status = clEnqueueWriteBuffer( m_commandQueue, (cl_mem)dst->m_ptr, 0, sizeof(T)*dstOffsetNElems, sizeof(T)*nElems,
+	int sz=sizeof(T)*nElems;
+	status = clEnqueueWriteBuffer( m_commandQueue, (cl_mem)dst->m_ptr, 0, sizeof(T)*dstOffsetNElems, sz,
 		src, 0,0,0 );
 	ADLASSERT( status == CL_SUCCESS );
 }

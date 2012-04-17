@@ -1,6 +1,18 @@
 /*
-		2011 Takahiro Harada
+Copyright (c) 2012 Advanced Micro Devices, Inc.  
+
+This software is provided 'as-is', without any express or implied warranty.
+In no event will the authors be held liable for any damages arising from the use of this software.
+Permission is granted to anyone to use this software for any purpose, 
+including commercial applications, and to alter it and redistribute it freely, 
+subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
 */
+//Originally written by Takahiro Harada
+
 
 #ifndef ADL_H
 #define ADL_H
@@ -99,7 +111,9 @@ struct Device
 {
 	typedef DeviceUtils::Config Config;
 
-	Device( DeviceType type ) : m_type( type ), m_memoryUsage(0){}
+	Device( DeviceType type ) : m_type( type ), m_memoryUsage(0)
+	{
+	}
 
 	virtual void* getContext() const { return 0; }
 	virtual void initialize(const Config& cfg){}
@@ -215,10 +229,7 @@ struct HostBuffer : public Buffer<T>
 
 
 #include <Adl/AdlStopwatch.h>
-#include <Adl/CL/AdlStopwatchCL.inl>
-#if defined(ADL_ENABLE_DX11)
-	#include <Adl/DX11/AdlStopwatchDX11.inl>
-#endif
+
 #include <Adl/Host/AdlStopwatchHost.inl>
 #include <Adl/AdlStopwatch.inl>
 
