@@ -44,7 +44,8 @@
 		configuration {"Windows", "x64"}
 			links {"glew64s"}
 
-		configuration{}
+		configuration{"not Windows", "not MacOSX"}
+			links {"GLEW"}
 	end
 
 

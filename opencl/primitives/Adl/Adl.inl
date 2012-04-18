@@ -242,8 +242,8 @@ Buffer<T>& Buffer<T>::operator = ( const Buffer<T>& buffer )
 
 template<DeviceType TYPE, bool COPY, typename T>
 __inline
-static
-typename Buffer<T>* BufferUtils::map(const Device* device, const Buffer<T>* in, int copySize)
+//static 
+Buffer<T>* BufferUtils::map(const Device* device, const Buffer<T>* in, int copySize)
 {
 	Buffer<T>* native;
 	ADLASSERT( device->m_type == TYPE );
@@ -281,7 +281,7 @@ typename Buffer<T>* BufferUtils::map(const Device* device, const Buffer<T>* in, 
 
 template<bool COPY, typename T>
 __inline
-static
+//static
 void BufferUtils::unmap( Buffer<T>* native, const Buffer<T>* orig, int copySize )
 {
 	if( native != orig )
@@ -320,21 +320,21 @@ void BufferUtils::unmap( Buffer<T>* native, const Buffer<T>* orig, int copySize 
 template<typename T>
 T& HostBuffer<T>::operator[](int idx)
 {
-	return m_ptr[idx];
+	return this->m_ptr[idx];
 }
 
 template<typename T>
 const T& HostBuffer<T>::operator[](int idx) const
 {
-	return m_ptr[idx];
+	return this->m_ptr[idx];
 }
 
 template<typename T>
 HostBuffer<T>& HostBuffer<T>::operator = ( const Buffer<T>& device )
 {
-	ADLASSERT( device.m_size <= m_size );
+	ADLASSERT( device.m_size <= this->m_size );
 
-	SELECT_DEVICEDATA1( device.m_device, copy( m_ptr, &device, device.m_size ) );
+	SELECT_DEVICEDATA1( device.m_device, copy( this->m_ptr, &device, device.m_size ) );
 
 	return *this;
 }

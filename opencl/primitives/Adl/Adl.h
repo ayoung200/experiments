@@ -30,6 +30,22 @@ subject to the following restrictions:
 #ifndef min
 #define min(a,b)            (((a) < (b)) ? (a) : (b))
 #endif
+#else
+#include <stdarg.h>
+void sprintf_s(char* buffer,const char* stringbuffer,...)
+{
+    va_list args;
+    va_start(args, stringbuffer);
+    vsprintf(buffer, stringbuffer, args);
+    va_end(args);
+}
+void sprintf_s(char* buffer, size_t size,const char* stringbuffer,...)
+{
+    va_list args;
+    va_start(args, stringbuffer);
+    vsnprintf(buffer,size, stringbuffer, args);
+    va_end(args);
+}
 #endif
 
 namespace adl
@@ -132,8 +148,8 @@ struct Device
 //	Buffer
 //==========================
 
-//template<typename T>
-//struct HostBuffer;
+template<typename T>
+struct HostBuffer;
 //	overload each deviceDatas
 template<typename T>
 struct Buffer : public BufferBase
@@ -163,7 +179,6 @@ struct Buffer : public BufferBase
 	int getSize() const { return m_size; }
 
 	DeviceType getType() const { ADLASSERT( m_device ); return m_device->m_type; }
-
 
 	const Device* m_device;
 	int m_size;
@@ -208,7 +223,7 @@ struct HostBuffer : public Buffer<T>
 	__inline
 	const T& operator[](int idx) const;
 	__inline
-	T* begin() { return m_ptr; }
+	T* begin() { return this->m_ptr; }
 
 	__inline
 	HostBuffer<T>& operator = (const Buffer<T>& device);

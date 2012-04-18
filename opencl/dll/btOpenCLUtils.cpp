@@ -38,9 +38,9 @@ static char* spPlatformVendor =
 #endif
 
 #ifndef CL_PLATFORM_MINI_CL
-#ifdef _WIN32
+//#ifdef _WIN32
 #include "CL/cl_gl.h"
-#endif //_WIN32
+//#endif //_WIN32
 #endif
 
 int btOpenCLUtils::getNumPlatforms(cl_int* pErrNum)

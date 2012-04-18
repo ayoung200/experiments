@@ -56,9 +56,9 @@ Kernel* KernelManager::query(const Device* dd, const char* fileName, const char*
 	char mapName[charSize];
 	{
 		if( option )
-			sprintf_s(mapName, charSize, "%d%s%s%s", (int)dd->getContext(), fullFineName, funcName, option);
+			sprintf_s(mapName, charSize, "%d%s%s%s", dd->getContext(), fullFineName, funcName, option);
 		else
-			sprintf_s(mapName, charSize, "%d%s%s", (int)dd->getContext(), fullFineName, funcName);
+			sprintf_s(mapName, charSize, "%d%s%s", dd->getContext(), fullFineName, funcName);
 	}
 
 	std::string str(mapName);

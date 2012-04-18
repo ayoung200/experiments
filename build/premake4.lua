@@ -66,7 +66,7 @@ end
 	
 
 	include "../bullet2"	
-	--include "../jpeglib"
+	include "../jpeglib"
 
 	
 

@@ -37,6 +37,7 @@ subject to the following restrictions:
 #else
 #include <GL/gl.h>
 #include <GL/glut.h>
+#include <GL/glx.h>
 #endif //_WINDOWS
 #endif //APPLE
 

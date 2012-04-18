@@ -49,9 +49,9 @@ static const char* spPlatformVendor =
 #endif
 
 #ifndef CL_PLATFORM_MINI_CL
-#ifdef _WIN32
+//#ifdef _WIN32
 #include "CL/cl_gl.h"
-#endif //_WIN32
+//#endif //_WIN32
 #endif
 
 
@@ -145,6 +145,19 @@ cl_context btOpenCLUtils_createContextFromPlatform(cl_platform_id platform, cl_d
 		cps[2] = CL_GL_CONTEXT_KHR;
 		cps[3] = (cl_context_properties)pGLContext;
 		cps[4] = CL_WGL_HDC_KHR;
+		cps[5] = (cl_context_properties)pGLDC;
+	}
+#elif _APPLE
+	//not tested -ASY 04/18/2012
+	CGLShareGroupObj kCGLShareGroup = CGLGetShareGroup(pGLContext);
+	cps[0]=CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE;
+	cps[1]=(cl_context_properties)kCGLShareGroup;
+#else
+	if (pGLContext && pGLDC)
+	{
+		cps[2] = CL_GL_CONTEXT_KHR;
+		cps[3] = (cl_context_properties)pGLContext;
+		cps[4] = CL_GLX_DISPLAY_KHR;
 		cps[5] = (cl_context_properties)pGLDC;
 	}
 #endif //_WIN32
@@ -491,7 +504,6 @@ cl_program btOpenCLUtils_compileCLProgramFromString(cl_context clContext, cl_dev
 		const char* strippedName;
 		int fileUpToDate = 0;
 		int binaryFileValid=0;
-		FILETIME modtimeBinary; 
 
 		clGetDeviceInfo(device, CL_DEVICE_NAME, 256, &deviceName, NULL);
 		clGetDeviceInfo(device, CL_DRIVER_VERSION, 256, &driverVersion, NULL);
@@ -511,103 +523,13 @@ cl_program btOpenCLUtils_compileCLProgramFromString(cl_context clContext, cl_dev
 
 		
 		
-
+#ifdef _WIN32
 		CreateDirectory("cache",0);
-		{
-			
-			HANDLE binaryFileHandle = CreateFile(binaryFileName,GENERIC_READ,0,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0);
-			if (binaryFileHandle ==INVALID_HANDLE_VALUE)
-			{
-				DWORD errorCode;
-				errorCode = GetLastError();
-				switch (errorCode)
-				{
-				case ERROR_FILE_NOT_FOUND:
-					{
-						printf("\nCached file not found %s\n", binaryFileName);
-						break;
-					}
-				case ERROR_PATH_NOT_FOUND:
-					{
-						printf("\nCached file path not found %s\n", binaryFileName);
-						break;
-					}
-				default:
-					{
-						printf("\nFailed reading cached file with errorCode = %d\n", errorCode);
-					}
-				}
-			} else
-			{
-				if (GetFileTime(binaryFileHandle, NULL, NULL, &modtimeBinary)==0)
-				{
-					DWORD errorCode;
-					errorCode = GetLastError();
-					printf("\nGetFileTime errorCode = %d\n", errorCode);
-				} else
-				{
-					binaryFileValid = 1;
-				}
-				CloseHandle(binaryFileHandle);
-			}
-
-			if (binaryFileValid)
-			{
-				HANDLE srcFileHandle = CreateFile(clFileNameForCaching,GENERIC_READ,0,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0);
-				if (srcFileHandle!=INVALID_HANDLE_VALUE)
-				{
-					FILETIME modtimeSrc; 
-					if (GetFileTime(srcFileHandle, NULL, NULL, &modtimeSrc)==0)
-					{
-						DWORD errorCode;
-						errorCode = GetLastError();
-						printf("\nGetFileTime errorCode = %d\n", errorCode);
-					}
-					if (  ( modtimeSrc.dwHighDateTime < modtimeBinary.dwHighDateTime)
-						||(( modtimeSrc.dwHighDateTime == modtimeBinary.dwHighDateTime)&&(modtimeSrc.dwLowDateTime <= modtimeBinary.dwLowDateTime)))
-					{
-						fileUpToDate=1;
-					} else
-					{
-						printf("\nCached binary file out-of-date (%s)\n",binaryFileName);
-					}
-					CloseHandle(srcFileHandle);
-				} 
-				else
-				{
-#ifdef _DEBUG
-					DWORD errorCode;
-					errorCode = GetLastError();
-					switch (errorCode)
-					{
-					case ERROR_FILE_NOT_FOUND:
-						{
-							printf("\nSrc file not found %s\n", clFileNameForCaching);
-							break;
-						}
-					case ERROR_PATH_NOT_FOUND:
-						{
-							printf("\nSrc path not found %s\n", clFileNameForCaching);
-							break;
-						}
-					default:
-						{
-							printf("\nnSrc file reading errorCode = %d\n", errorCode);
-						}
-					}
-
-					//we should make sure the src file exists so we can verify the timestamp with binary
-					assert(0);
 #else
-					//if we cannot find the source, assume it is OK in release builds
-					fileUpToDate = true;
+		mkdir("cache", 0777)
 #endif
-				}
-			}
-			
-
-		}
-
+		
+		fileUpToDate=isFileUpToDate(binaryFileName,clFileNameForCaching);
 		if( fileUpToDate)
 		{
 #ifdef _WIN32

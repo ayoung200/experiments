@@ -16,7 +16,6 @@ subject to the following restrictions:
 
 #ifndef _MSVC_
 #include <sys/stat.h>
-#define sprintf_s(buffer, stringbuffer, ...) (sprintf(buffer, stringbuffer, __VA_ARGS__))
 #endif
 
 
@@ -188,6 +187,39 @@ static bool isFileUpToDate(const char* binaryFileName,const char* srcFileName)
 
 	return fileUpToDate;
 }
+
+template<>
+void KernelBuilder<TYPE_CL>::setFromSrc( const Device* deviceData, const char* src, const char* option )
+{
+	ADLASSERT( deviceData->m_type == TYPE_CL );
+	m_deviceData = deviceData;
+	const DeviceCL* dd = (const DeviceCL*) deviceData;
+
+	cl_program& program = (cl_program&)m_ptr;
+	cl_int status = 0;
+	size_t srcSize[] = {strlen( src )};
+	program = clCreateProgramWithSource( dd->m_context, 1, &src, srcSize, &status );
+	ADLASSERT( status == CL_SUCCESS );
+	status = clBuildProgram( program, 1, &dd->m_deviceIdx, option, NULL, NULL );
+	if( status != CL_SUCCESS )
+	{
+		char *build_log;
+		size_t ret_val_size;
+		clGetProgramBuildInfo(program, dd->m_deviceIdx, CL_PROGRAM_BUILD_LOG, 0, NULL, &ret_val_size);
+		build_log = new char[ret_val_size+1];
+		clGetProgramBuildInfo(program, dd->m_deviceIdx, CL_PROGRAM_BUILD_LOG, ret_val_size, build_log, NULL);
+
+		build_log[ret_val_size] = '\0';
+
+		debugPrintf("%s\n", build_log);
+		printf("%s\n", build_log);
+
+		ADLASSERT(0);
+		delete build_log;
+		
+	}
+}
+
 
 template<>
 void KernelBuilder<TYPE_CL>::setFromFile( const Device* deviceData, const char* fileName, const char* option, bool addExtension,
@@ -457,38 +489,6 @@ void KernelBuilder<TYPE_CL>::setFromSrcCached( const Device* deviceData, const c
 	}
 }
 
-
-template<>
-void KernelBuilder<TYPE_CL>::setFromSrc( const Device* deviceData, const char* src, const char* option )
-{
-	ADLASSERT( deviceData->m_type == TYPE_CL );
-	m_deviceData = deviceData;
-	const DeviceCL* dd = (const DeviceCL*) deviceData;
-
-	cl_program& program = (cl_program&)m_ptr;
-	cl_int status = 0;
-	size_t srcSize[] = {strlen( src )};
-	program = clCreateProgramWithSource( dd->m_context, 1, &src, srcSize, &status );
-	ADLASSERT( status == CL_SUCCESS );
-	status = clBuildProgram( program, 1, &dd->m_deviceIdx, option, NULL, NULL );
-	if( status != CL_SUCCESS )
-	{
-		char *build_log;
-		size_t ret_val_size;
-		clGetProgramBuildInfo(program, dd->m_deviceIdx, CL_PROGRAM_BUILD_LOG, 0, NULL, &ret_val_size);
-		build_log = new char[ret_val_size+1];
-		clGetProgramBuildInfo(program, dd->m_deviceIdx, CL_PROGRAM_BUILD_LOG, ret_val_size, build_log, NULL);
-
-		build_log[ret_val_size] = '\0';
-
-		debugPrintf("%s\n", build_log);
-		printf("%s\n", build_log);
-
-		ADLASSERT(0);
-		delete build_log;
-		
-	}
-}
 
 template<>
 KernelBuilder<TYPE_CL>::~KernelBuilder()
