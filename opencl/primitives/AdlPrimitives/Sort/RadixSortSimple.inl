@@ -34,7 +34,7 @@ class RadixSortSimple : public RadixSortBase
 		
 
 		static
-		Data* allocate(const Device* deviceData, int maxSize, Option option = SORT_NORMAL);
+		Data* allocate(const Device* deviceData, int maxSize, Option option = SORT_STANDARD);//SORT_NORMAL); sort normal isn't defined. I assume SORT_STANDARD is desired -ASY 04/19/2012
 
 		static
 		void deallocate(void* data);

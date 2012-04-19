@@ -37,6 +37,10 @@ bool g_testFailed = 0;
 //#define TEST_ASSERT(x) if( !(x) ){g_testFailed = 1;ADLASSERT(x);}
 #define TEST_REPORT(testName) printf("[%s] %s\n",(g_testFailed)?"X":"O", testName); if(g_testFailed) g_nFailed++; else g_nPassed++;
 
+#ifndef _WIN32
+#define Sleep(milliseconds)(usleep(milliseconds*1000))
+#endif
+
 void memCpyTest( Device* deviceData )
 {
 	TEST_INIT;
@@ -136,6 +140,10 @@ void scanTest( Device* deviceGPU, Device* deviceHost )
 	ADLASSERT( type == deviceGPU->m_type );
 
 	int maxSize = 1024*256;
+
+
+#define STR(x) #x
+#pragma message "DeviceType = " STR(type)
 
 	HostBuffer<u32> buf0( deviceHost, maxSize );
 	HostBuffer<u32> buf1( deviceHost, maxSize );

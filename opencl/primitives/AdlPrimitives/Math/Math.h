@@ -33,8 +33,18 @@ subject to the following restrictions:
 
 #if defined(__WINDOWS__)
     #define _MEM_CLASSALIGN16 __declspec(align(16))
+    #define _MEM_CLASSALIGN16_NONWIN
 #else
-    #define _MEM_CLASSALIGN16 __attribute__((aligned(16)));
+    #define _MEM_CLASSALIGN16 
+    #define _MEM_CLASSALIGN16_NONWIN __attribute__((aligned(16)))
+    inline void* _aligned_malloc(size_t size, size_t alignment){
+        void* mem=NULL;
+        ADLASSERT(posix_memalign(&mem,alignment,size)==0);
+        return mem;
+    }
+    inline void _aligned_free(void* p){
+        free(p);
+    }
 #endif
 
 #define _MEM_ALIGNED_ALLOCATOR16 	void* operator new(size_t size) { return _aligned_malloc( size, 16 ); } \
@@ -76,7 +86,7 @@ struct float4
 		};
 		__m128 m_quad;
 	};
-};
+}_MEM_CLASSALIGN16_NONWIN;
 
 _MEM_CLASSALIGN16
 struct int4
@@ -93,7 +103,7 @@ struct int4
 			int s[4];
 		};
 	};
-};
+}_MEM_CLASSALIGN16_NONWIN;
 
 _MEM_CLASSALIGN16
 struct uint4
@@ -110,7 +120,7 @@ struct uint4
 			u32 s[4];
 		};
 	};
-};
+}_MEM_CLASSALIGN16_NONWIN;
 
 struct int2
 {

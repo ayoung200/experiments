@@ -56,8 +56,8 @@ class BoundSearch<TYPE_HOST> : public BoundSearchBase
 			{
 				for(u32 i=0; i<nSrc; i++)
 				{
-					SortData& iData = (i==0)? SortData(-1,-1): src[i-1];
-					SortData& jData = (i==nSrc)? SortData(nDst, nDst): src[i];
+					const SortData& iData = (i==0)? SortData(-1,-1): src[i-1];
+					const SortData& jData = (i==nSrc)? SortData(nDst, nDst): src[i];
 
 					if( iData.m_key != jData.m_key )
 					{
@@ -73,8 +73,8 @@ class BoundSearch<TYPE_HOST> : public BoundSearchBase
 			{
 				for(u32 i=0; i<nSrc+1; i++)
 				{
-					SortData& iData = (i==0)? SortData(0,0): src[i-1];
-					SortData& jData = (i==nSrc)? SortData(nDst, nDst): src[i];
+					const SortData& iData = (i==0)? SortData(0,0): src[i-1];
+					const SortData& jData = (i==nSrc)? SortData(nDst, nDst): src[i];
 
 					if( iData.m_key != jData.m_key )
 					{

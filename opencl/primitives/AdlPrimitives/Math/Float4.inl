@@ -185,7 +185,7 @@ void operator/=(float4& a, const float4& b)
 __inline
 void operator/=(float4& a, float b)
 {
-	ADLASSERT((u32(&a) & 0xf) == 0);
+	//ADLASSERT((u32(&a) & 0xf) == 0);
 
 	a.s[0]/=b;
 	a.s[1]/=b;
