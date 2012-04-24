@@ -419,10 +419,13 @@ void InitCL()
 
 #ifdef _WIN32
 	glCtx = wglGetCurrentContext();
-#else //!_WIN32
-	GLXContext glCtx = glXGetCurrentContext();
-#endif //!_WIN32
 	glDC = wglGetCurrentDC();
+#elif _APPLE
+	glCtx = CGLGetCurrentContext();
+#else //!_WIN32
+	glCtx = glXGetCurrentContext();
+	glDC = glXGetCurrentDisplay();
+#endif //!_WIN32
 
 	int ciErrNum = 0;
 	cl_device_type deviceType = CL_DEVICE_TYPE_ALL;//CPU;

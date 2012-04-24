@@ -40,12 +40,20 @@ Kernel* KernelManager::query(const Device* dd, const char* fileName, const char*
 	{
 	case TYPE_CL:
 #if defined(ADL_ENABLE_CL)
+#ifdef _WIN32
 		sprintf_s(fullFineName,charSize,"%s.cl", fileName);
+#else
+		snprintf(fullFineName,charSize,"%s.cl", fileName);
+#endif
 		break;
 #endif
 #if defined(ADL_ENABLE_DX11)
 	case TYPE_DX11:
+#ifdef _WIN32
 		sprintf_s(fullFineName,charSize,"%s.hlsl", fileName);
+#else
+		snprintf(fullFineName,charSize,"%s.hlsl", fileName);
+#endif
 		break;
 #endif
 	default:
@@ -56,9 +64,17 @@ Kernel* KernelManager::query(const Device* dd, const char* fileName, const char*
 	char mapName[charSize];
 	{
 		if( option )
+#ifdef _WIN32
 			sprintf_s(mapName, charSize, "%d%s%s%s", dd->getContext(), fullFineName, funcName, option);
+#else
+			snprintf(mapName, charSize, "%d%s%s%s", dd->getContext(), fullFineName, funcName, option);
+#endif
 		else
+#ifdef _WIN32
 			sprintf_s(mapName, charSize, "%d%s%s", dd->getContext(), fullFineName, funcName);
+#else
+			snprintf(mapName, charSize, "%d%s%s", dd->getContext(), fullFineName, funcName);
+#endif
 	}
 
 	std::string str(mapName);

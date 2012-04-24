@@ -13,7 +13,6 @@ subject to the following restrictions:
 */
 //Originally written by Takahiro Harada
 
-
 #ifndef ADL_H
 #define ADL_H
 
@@ -30,22 +29,6 @@ subject to the following restrictions:
 #ifndef min
 #define min(a,b)            (((a) < (b)) ? (a) : (b))
 #endif
-#else
-#include <stdarg.h>
-void sprintf_s(char* buffer,const char* stringbuffer,...)
-{
-    va_list args;
-    va_start(args, stringbuffer);
-    vsprintf(buffer, stringbuffer, args);
-    va_end(args);
-}
-void sprintf_s(char* buffer, size_t size,const char* stringbuffer,...)
-{
-    va_list args;
-    va_start(args, stringbuffer);
-    vsnprintf(buffer,size, stringbuffer, args);
-    va_end(args);
-}
 #endif
 
 namespace adl

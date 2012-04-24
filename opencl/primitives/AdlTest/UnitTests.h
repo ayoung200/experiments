@@ -41,6 +41,17 @@ bool g_testFailed = 0;
 #define Sleep(milliseconds)(usleep(milliseconds*1000))
 #endif
 
+#if defined(ADL_ENABLE_DX11)
+	#define RUN_GPU( func ) func(ddcl); func(dddx);
+	#define RUN_GPU_TEMPLATE( func ) func<DeviceType::TYPE_CL>( ddcl, ddhost ); func<TYPE_DX11>( dddx, ddhost );
+	#define RUN_CL_TEMPLATE( func ) func<DeviceType::TYPE_CL>( ddcl, ddhost );
+#else
+	#define RUN_GPU( func ) func(ddcl);
+	#define RUN_GPU_TEMPLATE( func ) func<DeviceType::TYPE_CL>( ddcl, ddhost ); 
+#endif
+#define RUN_ALL( func ) RUN_GPU( func ); func(ddhost);
+
+
 void memCpyTest( Device* deviceData )
 {
 	TEST_INIT;
@@ -104,8 +115,7 @@ void kernelTest( Device* deviceData )
 			launcher.launch1D( size );
 
 			buf0.read( hostBuf0, size );
-			buf1.read( hostBuf1, size );
-			DeviceUtils::waitForCompletion( deviceData );
+			buf1.read( hostBuf1, size ); DeviceUtils::waitForCompletion( deviceData );
 		}
 
 		for(int i=0; i<size; i++) { TEST_ASSERT( hostBuf0[i] == i+1+2 ); }
@@ -141,16 +151,12 @@ void scanTest( Device* deviceGPU, Device* deviceHost )
 
 	int maxSize = 1024*256;
 
-
-#define STR(x) #x
-#pragma message "DeviceType = " STR(type)
-
 	HostBuffer<u32> buf0( deviceHost, maxSize );
 	HostBuffer<u32> buf1( deviceHost, maxSize );
 	Buffer<u32> buf2( deviceGPU, maxSize );
 	Buffer<u32> buf3( deviceGPU, maxSize );
 
-	PrefixScan<type>::Data* data0 = PrefixScan<type>::allocate( deviceGPU, maxSize );
+	typename PrefixScan<type>::Data* data0 = PrefixScan<type>::allocate( deviceGPU, maxSize );
 	PrefixScan<TYPE_HOST>::Data* data1 = PrefixScan<TYPE_HOST>::allocate( deviceHost, maxSize );
 
 	int dx = maxSize/NUM_TESTS;
@@ -191,7 +197,7 @@ bool radixSortTest( Device* deviceGPU, Device* deviceHost )
 	Buffer<SortData> buf2( deviceGPU, maxSize );
 
 	RadixSort<TYPE_HOST>::Data* dataH = RadixSort<TYPE_HOST>::allocate( deviceHost, maxSize, RadixSortBase::SORT_SIMPLE );
-	RadixSort<type>::Data* dataC = RadixSort<type>::allocate( deviceGPU, maxSize, SORT_TYPE );
+	typename RadixSort<type>::Data* dataC = RadixSort<type>::allocate( deviceGPU, maxSize, SORT_TYPE );
 
 	int dx = maxSize/NUM_TESTS;
 	for(int iter=0; iter<NUM_TESTS; iter++)
@@ -259,7 +265,7 @@ void boundSearchTest( Device* deviceGPU, Device* deviceHost )
 	Buffer<u32> lower( deviceGPU, maxSize );
 	Buffer<u32> upper( deviceGPU, maxSize );
 
-	BoundSearch<type>::Data* dataH = BoundSearch<type>::allocate( deviceGPU );
+	typename BoundSearch<type>::Data* dataH = BoundSearch<type>::allocate( deviceGPU );
 	RadixSort<TYPE_HOST>::Data* dataHSort = RadixSort<TYPE_HOST>::allocate( deviceHost, maxSize, RadixSortBase::SORT_SIMPLE );
 
 	int dx = maxSize/NUM_TESTS;
@@ -335,7 +341,7 @@ void fillIntTest( Device* deviceGPU, Device* deviceHost )
 	Buffer<int> buf2( deviceGPU, maxSize );
 
 	Fill<TYPE_HOST>::Data* data0 = Fill<TYPE_HOST>::allocate( deviceHost );
-	Fill<type>::Data* data1 = Fill<type>::allocate( deviceGPU );
+	typename Fill<type>::Data* data1 = Fill<type>::allocate( deviceGPU );
 
 	int dx = maxSize/NUM_TESTS;
 	for(int iter=0; iter<NUM_TESTS; iter++)
@@ -373,7 +379,7 @@ void fillInt2Test( Device* deviceGPU, Device* deviceHost )
 	Buffer<int2> buf2( deviceGPU, maxSize );
 
 	Fill<TYPE_HOST>::Data* data0 = Fill<TYPE_HOST>::allocate( deviceHost );
-	Fill<type>::Data* data1 = Fill<type>::allocate( deviceGPU );
+	typename Fill<type>::Data* data1 = Fill<type>::allocate( deviceGPU );
 
 	int dx = maxSize/NUM_TESTS;
 	for(int iter=0; iter<NUM_TESTS; iter++)
@@ -411,7 +417,7 @@ void fillInt4Test( Device* deviceGPU, Device* deviceHost )
 	Buffer<int4> buf2( deviceGPU, maxSize );
 
 	Fill<TYPE_HOST>::Data* data0 = Fill<TYPE_HOST>::allocate( deviceHost );
-	Fill<type>::Data* data1 = Fill<type>::allocate( deviceGPU );
+	typename Fill<type>::Data* data1 = Fill<type>::allocate( deviceGPU );
 
 	int dx = maxSize/NUM_TESTS;
 	for(int iter=0; iter<NUM_TESTS; iter++)
@@ -451,7 +457,7 @@ bool CopyF4Test( Device* deviceGPU, Device* deviceHost )
 	HostBuffer<float4> devResult( deviceHost, maxSize );
 
 	Copy<TYPE_HOST>::Data* data0 = Copy<TYPE_HOST>::allocate( deviceHost );
-	Copy<type>::Data* data1 = Copy<type>::allocate( deviceGPU );
+	typename Copy<type>::Data* data1 = Copy<type>::allocate( deviceGPU );
 
 	int dx = maxSize/NUM_TESTS;
 	for(int iter=0; iter<NUM_TESTS; iter++)
@@ -521,7 +527,7 @@ void CopyF1Test( Device* deviceGPU, Device* deviceHost )
 	HostBuffer<float> devResult( deviceHost, maxSize );
 
 	Copy<TYPE_HOST>::Data* data0 = Copy<TYPE_HOST>::allocate( deviceHost );
-	Copy<type>::Data* data1 = Copy<type>::allocate( deviceGPU );
+	typename Copy<type>::Data* data1 = Copy<type>::allocate( deviceGPU );
 
 	int dx = maxSize/NUM_TESTS;
 	for(int iter=0; iter<NUM_TESTS; iter++)
@@ -566,7 +572,7 @@ void CopyF2Test( Device* deviceGPU, Device* deviceHost )
 	HostBuffer<float2> devResult( deviceHost, maxSize );
 
 	Copy<TYPE_HOST>::Data* data0 = Copy<TYPE_HOST>::allocate( deviceHost );
-	Copy<type>::Data* data1 = Copy<type>::allocate( deviceGPU );
+	typename Copy<type>::Data* data1 = Copy<type>::allocate( deviceGPU );
 
 	int dx = maxSize/NUM_TESTS;
 	for(int iter=0; iter<NUM_TESTS; iter++)
@@ -609,7 +615,7 @@ void radixSort32Test( Device* deviceGPU, Device* deviceHost )
 	Buffer<u32> buf2( deviceGPU, maxSize );
 
 	RadixSort32<TYPE_HOST>::Data* dataH = RadixSort32<TYPE_HOST>::allocate( deviceHost, maxSize );
-	RadixSort32<type>::Data* dataC = RadixSort32<type>::allocate( deviceGPU, maxSize );
+	typename RadixSort32<type>::Data* dataC = RadixSort32<type>::allocate( deviceGPU, maxSize );
 
 	int dx = maxSize/NUM_TESTS;
 	for(int iter=0; iter<NUM_TESTS; iter++)
@@ -657,7 +663,7 @@ void radixSortKeyValue32Test( Device* deviceGPU, Device* deviceHost )
 	Buffer<u32> buf7( deviceGPU, maxSize ); // Buffer for output values in device.
 
 	RadixSort32<TYPE_HOST>::Data* dataH = RadixSort32<TYPE_HOST>::allocate( deviceHost, maxSize );
-	RadixSort32<type>::Data* dataC = RadixSort32<type>::allocate( deviceGPU, maxSize );
+	typename RadixSort32<type>::Data* dataC = RadixSort32<type>::allocate( deviceGPU, maxSize );
 
 	int dx = maxSize/NUM_TESTS;
 
@@ -700,17 +706,6 @@ void radixSortKeyValue32Test( Device* deviceGPU, Device* deviceHost )
 
 	TEST_REPORT( "RadixSortKeyValue32Test" );
 }
-
-#if defined(ADL_ENABLE_DX11)
-	#define RUN_GPU( func ) func(ddcl); func(dddx);
-	#define RUN_GPU_TEMPLATE( func ) func<TYPE_CL>( ddcl, ddhost ); func<TYPE_DX11>( dddx, ddhost );
-	#define RUN_CL_TEMPLATE( func ) func<TYPE_CL>( ddcl, ddhost );
-#else
-	#define RUN_GPU( func ) func(ddcl);
-	#define RUN_GPU_TEMPLATE( func ) func<TYPE_CL>( ddcl, ddhost ); 
-#endif
-#define RUN_ALL( func ) RUN_GPU( func ); func(ddhost);
-
 void runAllTest()
 {
 	g_nPassed = 0;
@@ -742,11 +737,11 @@ void runAllTest()
 #endif
 
 
-		ddcl = DeviceUtils::allocate( TYPE_CL, cfg );
-		ddhost = DeviceUtils::allocate( TYPE_HOST, cfg );
+		ddcl = DeviceUtils::allocate( DeviceType::TYPE_CL, cfg );
+		ddhost = DeviceUtils::allocate( DeviceType::TYPE_HOST, cfg );
 //		cfg.m_type = DeviceUtils::Config::DEVICE_GPU;
 #if defined(ADL_ENABLE_DX11)
-		dddx = DeviceUtils::allocate( TYPE_DX11, cfg );
+		dddx = DeviceUtils::allocate( DeviceType::TYPE_DX11, cfg );
 #endif
 	}
 
@@ -768,9 +763,9 @@ void runAllTest()
 		RUN_GPU_TEMPLATE( CopyF1Test );
 		RUN_GPU_TEMPLATE( CopyF2Test );
 
-		boundSearchTest<TYPE_HOST>( ddhost, ddhost );
-//		fillTest<TYPE_HOST>( ddhost, ddhost );
-//		fillTest<TYPE_CL>( ddcl, ddhost );
+		boundSearchTest<DeviceType::TYPE_HOST>( ddhost, ddhost );
+//		fillTest<DeviceType::TYPE_HOST>( ddhost, ddhost );
+//		fillTest<DeviceType::TYPE_CL>( ddcl, ddhost );
 
 
 	

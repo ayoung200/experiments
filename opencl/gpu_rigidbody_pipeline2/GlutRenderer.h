@@ -16,7 +16,7 @@ subject to the following restrictions:
 #ifndef GLUT_RENDERER_H
 #define GLUT_RENDERER_H
 
-#include "btGlutInclude.h"
+#include "../../rendering/GlutGlewWindows/btGlutInclude.h"
 #include "LinearMath/btVector3.h"
 
 struct GlutRenderer

@@ -27,7 +27,7 @@ subject to the following restrictions:
 #include "../opencl/gpu_rigidbody_pipeline/btGpuNarrowPhaseAndSolver.h"
 #include "../opencl/gpu_rigidbody_pipeline/btConvexUtility.h"
 #include "../../dynamics/basic_demo/ConvexHeightFieldShape.h"
-#include "../broadphase_benchmark/btGridBroadphaseCl.h"
+#include "../broadphase_benchmark/btGridBroadphaseCL.h"
 #include "LinearMath/btQuickprof.h"
 
 
@@ -122,10 +122,13 @@ void InitCL(int preferredDeviceIndex, int preferredPlatformIndex, bool useIntero
 
 #ifdef _WIN32
 	glCtx = wglGetCurrentContext();
-#else //!_WIN32
-	GLXContext glCtx = glXGetCurrentContext();
-#endif //!_WIN32
 	glDC = wglGetCurrentDC();
+#elif _APPLE
+	glCtx = CGLGetCurrentContext();
+#else //!_WIN32
+	glCtx = glXGetCurrentContext();
+	glDC = glXGetCurrentDisplay();
+#endif //!_WIN32
 
 	int ciErrNum = 0;
 #ifdef CL_PLATFORM_INTEL

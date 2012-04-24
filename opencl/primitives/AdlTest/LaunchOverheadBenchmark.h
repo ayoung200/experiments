@@ -29,7 +29,7 @@ void copyTest( Device* device )
 
 	Stopwatch sw( device );
 	
-	Copy<TYPE>::Data* data = Copy<TYPE>::allocate( device );
+	typename Copy<TYPE>::Data* data = Copy<TYPE>::allocate( device );
 
 	for(int i=0; i<10; i++)
 		Copy<TYPE>::execute( data, buf1, buf0, size, CopyBase::PER_WI_1 );

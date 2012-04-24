@@ -7,9 +7,9 @@ void run( Device* device, int minSize = 512, int maxSize = 64*1024 )//, int incr
 	Stopwatch sw( device );
 
 //	RadixSort<TYPE>::Data* data0 = RadixSort<TYPE>::allocate( device, maxSize, RadixSortBase::SORT_SIMPLE );
-	RadixSort<TYPE>::Data* data0 = RadixSort<TYPE>::allocate( device, maxSize, RadixSortBase::SORT_STANDARD );
-	RadixSort<TYPE>::Data* data1 = RadixSort<TYPE>::allocate( device, maxSize, RadixSortBase::SORT_STANDARD );
-	RadixSort<TYPE>::Data* data2 = RadixSort<TYPE>::allocate( device, maxSize, RadixSortBase::SORT_ADVANCED );
+	typename RadixSort<TYPE>::Data* data0 = RadixSort<TYPE>::allocate( device, maxSize, RadixSortBase::SORT_STANDARD );
+	typename RadixSort<TYPE>::Data* data1 = RadixSort<TYPE>::allocate( device, maxSize, RadixSortBase::SORT_STANDARD );
+	typename RadixSort<TYPE>::Data* data2 = RadixSort<TYPE>::allocate( device, maxSize, RadixSortBase::SORT_ADVANCED );
 
 	Buffer<SortData> buf0( device, maxSize );
 	Buffer<SortData> buf1( device, maxSize );
@@ -67,8 +67,8 @@ void run32( Device* device, int size )
 
 	Stopwatch sw( device );
 
-	RadixSort32<TYPE>::Data* data = RadixSort32<TYPE>::allocate( device, size );
-	Copy<TYPE>::Data* copyData = Copy<TYPE>::allocate( device );
+	typename RadixSort32<TYPE>::Data* data = RadixSort32<TYPE>::allocate( device, size );
+	typename Copy<TYPE>::Data* copyData = Copy<TYPE>::allocate( device );
 
 	Buffer<u32> inputMaster( device, size );
 	Buffer<u32> input( device, size );

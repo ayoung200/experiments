@@ -129,7 +129,7 @@ void TimedSort(
 
 	deviceData->initialize(cfg);
 
-	RadixSort32<type>::Data* planData = RadixSort32<type>::allocate( deviceData, max_elements);
+	typename RadixSort32<type>::Data* planData = RadixSort32<type>::allocate( deviceData, max_elements);
 
 	{
 		Buffer<unsigned int>	keysInOut(deviceData,max_elements);
@@ -238,7 +238,7 @@ void TimedSort(
 #endif //ADL_ENABLE_DX11
 
 	deviceData->initialize(cfg);
-	RadixSort32<type>::Data* planData = RadixSort32<type>::allocate( deviceData, max_elements);
+	typename RadixSort32<type>::Data* planData = RadixSort32<type>::allocate( deviceData, max_elements);
 	{
 		Buffer<unsigned int>	keysIn(deviceData,max_elements);
 		Buffer<unsigned int>	valuesIn(deviceData,max_elements);

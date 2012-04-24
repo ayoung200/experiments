@@ -19,7 +19,6 @@ subject to the following restrictions:
 #include "Stubs/AdlQuaternion.h"
 #include "Stubs/AdlCollisionShape.h"
 #include "Stubs/AdlAabb.h"
-
 class ShapeBase;
 
 class ConvexHeightField : public CollisionShape

@@ -25,7 +25,7 @@ subject to the following restrictions:
 #include "LinearMath/btQuickprof.h"
 #include "LinearMath/btMatrix3x3.h"
 
-#include "../../opencl/gpu_rigidbody_pipeline/btGpuNarrowphaseAndSolver.h"//for MAX_CONVEX_BODIES_CL
+#include "../../opencl/gpu_rigidbody_pipeline/btGpuNarrowPhaseAndSolver.h"//for MAX_CONVEX_BODIES_CL
 
 struct btGraphicsInstance
 {

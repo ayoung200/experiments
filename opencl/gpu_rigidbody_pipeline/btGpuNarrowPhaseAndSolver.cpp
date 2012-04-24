@@ -13,7 +13,7 @@ subject to the following restrictions:
 */
 //Originally written by Erwin Coumans
 
-#include "btGpuNarrowphaseAndSolver.h"
+#include "btGpuNarrowPhaseAndSolver.h"
 
 //#include "CustomConvexShape.h"
 //#include "CustomConvexPairCollision.h"

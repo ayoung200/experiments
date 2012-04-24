@@ -31,12 +31,12 @@ extern int gpuBatchContacts;
 #include <GL/glew.h>
 #include <stdio.h>
 
-#include "btGlutInclude.h"
+#include "../../rendering/GlutGlewWindows/btGlutInclude.h"
 #include "../opengl_interop/btStopwatch.h"
 #include "../../dynamics/basic_demo/ConvexHeightFieldShape.h"
 #include "../../dynamics/basic_demo/Stubs/AdlRigidBody.h"
 
-#include "btGpuNarrowphaseAndSolver.h"
+#include "btGpuNarrowPhaseAndSolver.h"
 
 #include "LinearMath/btQuickprof.h"
 
@@ -55,7 +55,7 @@ static float angle(0);
 #include <math.h>
 #include "../3dGridBroadphase/Shared/btGpu3DGridBroadphase.h"
 #include "../3dGridBroadphase/Shared/bt3dGridBroadphaseOCL.h"
-#include "../broadphase_benchmark/btGridBroadphaseCl.h"
+#include "../broadphase_benchmark/btGridBroadphaseCL.h"
 #include "btConvexUtility.h"
 
 #define USE_NEW
@@ -662,10 +662,14 @@ void InitCL(int preferredDeviceIndex, int preferredPlatformIndex)
 
 #ifdef _WIN32
 	glCtx = wglGetCurrentContext();
-#else //!_WIN32
-	GLXContext glCtx = glXGetCurrentContext();
-#endif //!_WIN32
 	glDC = wglGetCurrentDC();
+#elif _APPLE
+	glCtx = CGLGetCurrentContext();
+#else //!_WIN32
+	glCtx = glXGetCurrentContext();
+	glDC = glXGetCurrentDisplay();
+#endif //!_WIN32
+
 
 	int ciErrNum = 0;
 #ifdef CL_PLATFORM_INTEL
@@ -824,7 +828,7 @@ void InitShaders()
 		}
 	}
 
-	float posZero[4] = {0,-NUM_OBJECTS_Y/2-1,0,0};
+	float posZero[4] = {0,-NUM_OBJECTS_Y/2.0f-1,0,0};
 	float ornZero[4] = {0,0,0,1};
 
 	//register a 'plane'
@@ -1564,7 +1568,7 @@ void ShutdownRC(void)
 	glDeleteVertexArrays(1, &cube_vao);
 }
 
-#include "CommandlineArgs.h"
+#include "CommandLineArgs.h"
 
 void Usage()
 {

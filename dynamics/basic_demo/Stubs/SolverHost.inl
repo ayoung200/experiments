@@ -21,7 +21,11 @@ public:
 
 
 	static
+	#if defined(__WINDOWS__)
 	__forceinline
+	#else
+	inline __attribute__((always_inline))
+	#endif
 	void setLinearAndAngular(const MYF4& n, const MYF4& r0, const MYF4& r1,
 							 MYF4& linear, MYF4& angular0, MYF4& angular1)
 	{
@@ -31,7 +35,11 @@ public:
 	}
 
 	static
+	#if defined(__WINDOWS__)
 	__forceinline
+	#else
+	inline __attribute__((always_inline))
+	#endif
 	float calcJacCoeff(const MYF4& linear0, const MYF4& linear1, const MYF4& angular0, const MYF4& angular1,
 					  float invMass0, const Matrix3x3& invInertia0, float invMass1, const Matrix3x3& invInertia1)
 	{
@@ -43,7 +51,11 @@ public:
 		return -1.f/(jmj0+jmj1+jmj2+jmj3);
 	}
 	static
+	#if defined(__WINDOWS__)
 	__forceinline
+	#else
+	inline __attribute__((always_inline))
+	#endif
 	float calcRelVel(const MYF4& l0, const MYF4& l1, const MYF4& a0, const MYF4& a1, 
 					 const MYF4& linVel0, const MYF4& angVel0, const MYF4& linVel1, const MYF4& angVel1)
 	{
@@ -51,7 +63,11 @@ public:
 	}
 
 	static
+	#if defined(__WINDOWS__)
 	__forceinline
+	#else
+	inline __attribute__((always_inline))
+	#endif
 	void setConstraint4( const MYF4& posA, const MYF4& linVelA, const MYF4& angVelA, float invMassA, const Matrix3x3& invInertiaA, 
 		const MYF4& posB, const MYF4& linVelB, const MYF4& angVelB, float invMassB, const Matrix3x3& invInertiaB, 
 		const Contact4& src, const SolverBase::ConstraintCfg& cfg, 
@@ -502,7 +518,8 @@ struct SolveTask// : public ThreadPool::Task
 
 
 template<>
-static Solver<adl::TYPE_HOST>::Data* Solver<adl::TYPE_HOST>::allocate( const Device* device, int pairCapacity )
+//static 
+Solver<adl::TYPE_HOST>::Data* Solver<adl::TYPE_HOST>::allocate( const Device* device, int pairCapacity )
 {
 	Solver<adl::TYPE_HOST>::Data* data = new Data;
 	data->m_device = device;
@@ -512,7 +529,8 @@ static Solver<adl::TYPE_HOST>::Data* Solver<adl::TYPE_HOST>::allocate( const Dev
 }
 
 template<>
-static void Solver<adl::TYPE_HOST>::deallocate( Solver<TYPE_HOST>::Data* data )
+//static --doesn't compile on gcc with static keyword in the template specialization. --ASY 04/24/2012
+void Solver<adl::TYPE_HOST>::deallocate( Solver<TYPE_HOST>::Data* data )
 {
 	if( data->m_parallelSolveData ) delete (SolverInl::ParallelSolveData*)data->m_parallelSolveData;
 	delete data;
@@ -823,7 +841,7 @@ static void batchContacts2(  Solver<TYPE_HOST>::Data* data, Buffer<Contact4>* co
 			{
 				numNonzeroGrid++;
 				int numBatches = SolverInl::sortConstraintByBatch( contactNative->m_ptr+offset, n, staticIdx,-1 );	//	on GPU
-				maxNumBatches = max(numBatches,maxNumBatches);
+				maxNumBatches = std::max(numBatches,maxNumBatches);
 
 	//			SolverInl::sortConstraintByBatch( contactNative->m_ptr+offset, n, staticIdx );	//	on CPU
 			}

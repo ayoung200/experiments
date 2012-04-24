@@ -939,14 +939,15 @@ void RenderScene(void)
 	glDrawElementsInstanced(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, (void*)indexOffset, numInstances);
 
 	glUseProgram(0);
-	glBindBuffer(GL_ARRAY_BUFFER,0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
 	glBindVertexArray(0);
 
 	glutSwapBuffers();
 	glutPostRedisplay();
 
-	GLint err = glGetError();
-	assert(err==GL_NO_ERROR);
+	//GLint err = glGetError();
+	//printf("gl error %d",err);
+	//assert(err==GL_NO_ERROR);
 }
 
 

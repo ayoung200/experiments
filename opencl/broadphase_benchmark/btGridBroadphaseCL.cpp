@@ -21,7 +21,7 @@ subject to the following restrictions:
 #endif
 
 
-#include "btGridBroadphaseCl.h"
+#include "btGridBroadphaseCL.h"
 #include "LinearMath/btQuickprof.h"
 #include "Adl/Adl.h"
 #include "AdlPrimitives/Math/Math.h"

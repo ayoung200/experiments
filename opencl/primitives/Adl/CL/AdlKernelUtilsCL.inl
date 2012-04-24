@@ -189,7 +189,7 @@ static bool isFileUpToDate(const char* binaryFileName,const char* srcFileName)
 }
 
 template<>
-void KernelBuilder<TYPE_CL>::setFromSrc( const Device* deviceData, const char* src, const char* option )
+inline void KernelBuilder<TYPE_CL>::setFromSrc( const Device* deviceData, const char* src, const char* option )
 {
 	ADLASSERT( deviceData->m_type == TYPE_CL );
 	m_deviceData = deviceData;
@@ -222,7 +222,7 @@ void KernelBuilder<TYPE_CL>::setFromSrc( const Device* deviceData, const char* s
 
 
 template<>
-void KernelBuilder<TYPE_CL>::setFromFile( const Device* deviceData, const char* fileName, const char* option, bool addExtension,
+inline void KernelBuilder<TYPE_CL>::setFromFile( const Device* deviceData, const char* fileName, const char* option, bool addExtension,
 	bool cacheKernel)
 {
 	m_deviceData = deviceData;
@@ -230,9 +230,17 @@ void KernelBuilder<TYPE_CL>::setFromFile( const Device* deviceData, const char* 
 	char fileNameWithExtension[256];
 
 	if( addExtension )
+#ifdef _WIN32
 		sprintf_s( fileNameWithExtension, "%s.cl", fileName );
+#else
+		sprintf( fileNameWithExtension, "%s.cl", fileName );
+#endif
 	else
+#ifdef _WIN32
 		sprintf_s( fileNameWithExtension, "%s", fileName );
+#else
+		sprintf( fileNameWithExtension, "%s", fileName );
+#endif
 
 	class File
 	{
@@ -298,7 +306,11 @@ void KernelBuilder<TYPE_CL>::setFromFile( const Device* deviceData, const char* 
 		const char* strippedFileName = strip(fileName,"\\");
 		strippedFileName = strip(strippedFileName,"/");
 
+#ifdef _WIN32
 		sprintf_s(binaryFileName,"cache/%s.%s.%s.bin",strippedFileName, deviceName,driverVersion );
+#else
+		sprintf(binaryFileName,"cache/%s.%s.%s.bin",strippedFileName, deviceName,driverVersion );
+#endif
 	}
 
 	bool upToDate = isFileUpToDate(binaryFileName,fileNameWithExtension);
@@ -378,7 +390,7 @@ void KernelBuilder<TYPE_CL>::setFromFile( const Device* deviceData, const char* 
 
 
 template<>
-void KernelBuilder<TYPE_CL>::setFromSrcCached( const Device* deviceData, const char* src, const char* fileName, const char* option )
+inline void KernelBuilder<TYPE_CL>::setFromSrcCached( const Device* deviceData, const char* src, const char* fileName, const char* option )
 {
 	m_deviceData = deviceData;
 
@@ -397,12 +409,20 @@ void KernelBuilder<TYPE_CL>::setFromSrcCached( const Device* deviceData, const c
 		const char* strippedFileName = strip(fileName,"\\");
 		strippedFileName = strip(strippedFileName,"/");
 
+#ifdef _WIN32
 		sprintf_s(binaryFileName,"cache/%s.%s.%s.bin",strippedFileName, deviceName,driverVersion );
+#else
+		sprintf(binaryFileName,"cache/%s.%s.%s.bin",strippedFileName, deviceName,driverVersion );
+#endif
 	}
 
 	
 	char fileNameWithExtension[256];
+#ifdef _WIN32
 	sprintf_s(fileNameWithExtension,"%s.cl",fileName, ".cl");
+#else
+	sprintf(fileNameWithExtension,"%s.cl",fileName, ".cl");
+#endif
 
 	bool upToDate = isFileUpToDate(binaryFileName,fileNameWithExtension);
 
@@ -491,14 +511,14 @@ void KernelBuilder<TYPE_CL>::setFromSrcCached( const Device* deviceData, const c
 
 
 template<>
-KernelBuilder<TYPE_CL>::~KernelBuilder()
+inline KernelBuilder<TYPE_CL>::~KernelBuilder()
 {
 	cl_program program = (cl_program)m_ptr;
 	clReleaseProgram( program );
 }
 
 template<>
-void KernelBuilder<TYPE_CL>::createKernel( const char* funcName, Kernel& kernelOut )
+inline void KernelBuilder<TYPE_CL>::createKernel( const char* funcName, Kernel& kernelOut )
 {
 	KernelCL* clKernel = (KernelCL*)&kernelOut;
 
@@ -511,7 +531,7 @@ void KernelBuilder<TYPE_CL>::createKernel( const char* funcName, Kernel& kernelO
 }
 
 template<>
-void KernelBuilder<TYPE_CL>::deleteKernel( Kernel& kernel )
+inline void KernelBuilder<TYPE_CL>::deleteKernel( Kernel& kernel )
 {
 	KernelCL* clKernel = (KernelCL*)&kernel;
 	clReleaseKernel( clKernel->getKernel() );

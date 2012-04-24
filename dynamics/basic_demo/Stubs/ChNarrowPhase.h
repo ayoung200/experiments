@@ -29,9 +29,10 @@ subject to the following restrictions:
 //#include "RigidBody.h"
 //#include "ConvexHeightFieldShape.h"
 
+class ShapeBase;
+
 namespace adl
 {
-class ShapeBase;
 
 class ChNarrowphaseBase
 {

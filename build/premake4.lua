@@ -3,6 +3,8 @@ solution "0MySolution"
 	-- Multithreaded compiling
 	if _ACTION == "vs2010" or _ACTION=="vs2008" then
 		buildoptions { "/MP"  }
+	elseif _ACTION == "gmake" then
+		buildoptions {"-fpermissive -std=c++0x"}
 	end 
 	
 	newoption {
@@ -86,7 +88,7 @@ if not _OPTIONS["with-nacl"] then
 	include "../opencl/3dGridBroadphase"
 	include "../opencl/broadphase_benchmark"
 	include "../opencl/gpu_rigidbody_pipeline"
-	include "../opencl/gpu_rigidbody_pipeline2"
+	--include "../opencl/gpu_rigidbody_pipeline2"
 	
 	--include "../dynamics/profiler_test"
 	--include "../Lua"

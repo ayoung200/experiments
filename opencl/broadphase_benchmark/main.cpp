@@ -41,7 +41,9 @@ subject to the following restrictions:
 #include <GL/glew.h>
 #include <stdio.h>
 
-#include "btGlutInclude.h"
+////for Adl
+#include <Adl/Adl.h>
+#include "../../rendering/GlutGlewWindows/btGlutInclude.h"
 #include "../opengl_interop/btStopwatch.h"
 
 
@@ -60,7 +62,7 @@ static float angle(0);
 #include <math.h>
 #include "../3dGridBroadphase/Shared/btGpu3DGridBroadphase.h"
 #include "../3dGridBroadphase/Shared/bt3dGridBroadphaseOCL.h"
-#include "btGridBroadphaseCl.h"
+#include "btGridBroadphaseCL.h"
 
 #define USE_NEW
 #ifdef USE_NEW
@@ -131,8 +133,6 @@ cl_kernel g_sineWaveKernel;
 
 
 
-////for Adl
-#include <Adl/Adl.h>
 
 adl::DeviceCL* g_deviceCL=0;
 
@@ -643,15 +643,17 @@ void InitCL()
 {
 	void* glCtx=0;
 	void* glDC = 0;
-
-#ifdef _WIN32
-	glCtx = wglGetCurrentContext();
-#else //!_WIN32
-	GLXContext glCtx = glXGetCurrentContext();
-#endif //!_WIN32
-	glDC = wglGetCurrentDC();
-
 	int ciErrNum = 0;
+#ifdef _WIN32
+        glCtx = wglGetCurrentContext();
+        glDC = wglGetCurrentDC();
+#elif _APPLE
+        glCtx = CGLGetCurrentContext();
+#else //!_WIN32
+        glCtx = glXGetCurrentContext();
+        glDC = glXGetCurrentDisplay();
+#endif //!_WIN32
+
 #ifdef CL_PLATFORM_INTEL
 	cl_device_type deviceType = CL_DEVICE_TYPE_ALL;
 #else
@@ -1379,14 +1381,14 @@ void RenderScene(void)
 	glDrawElementsInstanced(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, (void*)indexOffset, numInstances);
 
 	glUseProgram(0);
-	glBindBuffer(GL_ARRAY_BUFFER,0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
 	glBindVertexArray(0);
 
 	glutSwapBuffers();
 	glutPostRedisplay();
 
 	GLint err = glGetError();
-	assert(err==GL_NO_ERROR);
+	//assert(err==GL_NO_ERROR);
 }
 
 

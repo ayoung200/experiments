@@ -30,8 +30,22 @@ subject to the following restrictions:
 #define PI       3.14159265358979323846f
 #define NEXTMULTIPLEOF(num, alignment) (((num)/(alignment) + (((num)%(alignment)==0)?0:1))*(alignment))
 
+#if defined(__WINDOWS__)
+    #define _MEM_CLASSALIGN16 __declspec(align(16))
+    #define _MEM_CLASSALIGN16_NONWIN
+#else
+    #define _MEM_CLASSALIGN16 
+    #define _MEM_CLASSALIGN16_NONWIN __attribute__((aligned(16)))
+    inline void* _aligned_malloc(size_t size, size_t alignment){
+        void* mem=NULL;
+        ADLASSERT(posix_memalign(&mem,alignment,size)==0);
+        return mem;
+    }
+    inline void _aligned_free(void* p){
+        free(p);
+    }
+#endif
 
-#define _MEM_CLASSALIGN16 __declspec(align(16))
 #define _MEM_ALIGNED_ALLOCATOR16 	void* operator new(size_t size) { return _aligned_malloc( size, 16 ); } \
 	void operator delete(void *p) { _aligned_free( p ); } \
 	void* operator new[](size_t size) { return _aligned_malloc( size, 16 ); } \
@@ -67,9 +81,13 @@ struct float4
 		};
 		__m128 m_quad;
 	};
-};
+}_MEM_CLASSALIGN16_NONWIN;
 
+#if defined(__WINDOWS__)
 __forceinline
+#else
+inline unsigned int isZero(const float4& a) __attribute__((always_inline));
+#endif
 unsigned int isZero(const float4& a)
 {
 	return (a.x == 0.f) & (a.y == 0.f) & (a.z == 0.f) & (a.w == 0.f);
@@ -90,7 +108,7 @@ struct int4
 			int s[4];
 		};
 	};
-};
+}_MEM_CLASSALIGN16_NONWIN;
 
 struct int2
 {
