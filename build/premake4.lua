@@ -88,9 +88,10 @@ if not _OPTIONS["with-nacl"] then
 	include "../opencl/3dGridBroadphase"
 	include "../opencl/broadphase_benchmark"
 	include "../opencl/gpu_rigidbody_pipeline"
+	include "../opencl/gpu_rigidbody_pipeline_sph"
 	--include "../opencl/gpu_rigidbody_pipeline2"
 	
-	--include "../dynamics/profiler_test"
+	include "../dynamics/profiler_test"
 	--include "../Lua"
 	
 	
@@ -114,13 +115,13 @@ end
 	include "../dynamics/position_based_dynamics"
 	include "../dynamics/basic_demo"
 	
-	--include "../dynamics/corotational_fem"
+	include "../dynamics/corotational_fem"
 	--include "../dynamics/nncg_test"
 
 	include "../rendering/Gwen/Gwen"
 	include "../rendering/Gwen/GwenOpenGLTest"
 	include "../rendering/OpenGLES2Angle"
 else
-	--include "../rendering/NativeClient"	
+	include "../rendering/NativeClient"	
 	
 end

@@ -48,7 +48,7 @@ __kernel void kCalcHashAABB(int numObjects, __global float4* pAABB, __global int
 }
 
 // calculate grid hash value for each body using its AABB
-__kernel void kCalcHash(int numObjects, __global float4* pos, __global int2* pHash, __global float4* pParams GUID_ARG)
+__kernel void kCalcHashParticle(int numObjects, __global float4* pos, __global int2* pHash, __global float4* pParams GUID_ARG)
 {
     int index = get_global_id(0);
     if(index >= numObjects)
@@ -56,7 +56,7 @@ __kernel void kCalcHash(int numObjects, __global float4* pos, __global int2* pHa
 		return;
 	}
     // get address in grid
-    int4 gridPos = getGridPos(pos, pParams);
+    int4 gridPos = getGridPos(pos[index], pParams);
     int gridHash = getPosHash(gridPos, pParams);
     // store grid hash and body index
     int2 hashVal;
@@ -110,12 +110,16 @@ int testAABBOverlap(float4 min0, float4 max0, float4 min1, float4 max1)
 			(min0.y <= max1.y)&& (min1.y <= max0.y) &&
 			(min0.z <= max1.z)&& (min1.z <= max0.z);
 }
-#define SQ(x)(x*x)
-int testAABBSphereOverlap(float4 min, float4 max, float4 center, float r)
+__inline float SQ(float x)
 {
-    return (SQ(max(min.x-center,0)+max(max.x-center))+
-    SQ(max(min.y-center,0)+max(max.y-center))+
-    SQ(max(min.z-center,0)+max(max.z-center)))<=SQ(r);
+    return x*x;
+}
+
+int testAABBSphereOverlap(float4 min0, float4 max0, float4 center, float r)
+{
+    return (SQ(max(min0.x-center.x,0.0f)+max(max0.x-center.x,0.0f))+
+    SQ(max(min0.y-center.y,0.0f)+max(max0.y-center.y,0.0f))+
+    SQ(max(min0.z-center.z,0.0f)+max(max0.z-center.z,0.0f)))<=SQ(r);
 }
 
 void findPairsInCell(	int numObjects,

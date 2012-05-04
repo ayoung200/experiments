@@ -1,10 +1,10 @@
 /*
-Copyright (c) 2012 Advanced Micro Devices, Inc.  
+Copyright (c) 2012 Advanced Micro Devices, Inc.
 
 This software is provided 'as-is', without any express or implied warranty.
 In no event will the authors be held liable for any damages arising from the use of this software.
-Permission is granted to anyone to use this software for any purpose, 
-including commercial applications, and to alter it and redistribute it freely, 
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it freely,
 subject to the following restrictions:
 
 1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
@@ -66,14 +66,14 @@ typedef unsigned char u8;
 __inline
 float fastDiv(float numerator, float denominator)
 {
-	return native_divide(numerator, denominator);	
-//	return numerator/denominator;	
+	return native_divide(numerator, denominator);
+//	return numerator/denominator;
 }
 
 __inline
 float4 fastDiv4(float4 numerator, float4 denominator)
 {
-	return native_divide(numerator, denominator);	
+	return native_divide(numerator, denominator);
 }
 
 __inline
@@ -388,13 +388,13 @@ typedef struct
 {
 	float4 m_linear;
 	float4 m_worldPos[4];
-	float4 m_center;	
+	float4 m_center;
 	float m_jacCoeffInv[4];
 	float m_b[4];
 	float m_appliedRambdaDt[4];
 
-	float m_fJacCoeffInv[2];	
-	float m_fAppliedRambdaDt[2];	
+	float m_fJacCoeffInv[2];
+	float m_fAppliedRambdaDt[2];
 
 	u32 m_bodyA;
 	u32 m_bodyB;
@@ -476,7 +476,7 @@ void solveContact(__global Constraint4* cs,
 		float4 r1 = cs->m_worldPos[ic] - posB;
 		setLinearAndAngular( -cs->m_linear, r0, r1, &linear, &angular0, &angular1 );
 
-		float rambdaDt = calcRelVel( cs->m_linear, -cs->m_linear, angular0, angular1, 
+		float rambdaDt = calcRelVel( cs->m_linear, -cs->m_linear, angular0, angular1,
 			*linVelA, *angVelA, *linVelB, *angVelB ) + cs->m_b[ic];
 		rambdaDt *= cs->m_jacCoeffInv[ic];
 
@@ -580,8 +580,8 @@ void solveAConstraint(__global Body* gBodies, __global Shape* gShapes, __global 
 	float4 angVelB = gBodies[bIdx].m_angVel;
 	float invMassB = gBodies[bIdx].m_invMass;
 	Matrix3x3 invInertiaB = gShapes[bIdx].m_invInertia;
-		
-		
+
+
 	{
 		solveContact( ldsCs, posA, &linVelA, &angVelA, invMassA, invInertiaA,
 			posB, &linVelB, &angVelB, invMassB, invInertiaB );
@@ -684,7 +684,7 @@ void solveFrictionConstraint(__global Body* gBodies, __global Shape* gShapes, __
 	gBodies[bIdx].m_angVel = angVelB;
 }
 
-typedef struct 
+typedef struct
 {
 	int m_valInt0;
 	int m_valInt1;
@@ -701,11 +701,11 @@ typedef struct
 __kernel
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
 //void BatchSolveKernel(__global Body* gBodies, __global Shape* gShapes, __global Constraint4* gConstraints, 	__global int* gN, __global int* gOffsets, __global SolverDebugInfo* debugInfo, ConstBufferBatchSolve cb)
-void BatchSolveKernel(__global Body* gBodies, 
-__global Shape* gShapes, 
-__global Constraint4* gConstraints, 	
-__global int* gN, 
-__global int* gOffsets, 
+void BatchSolveKernel(__global Body* gBodies,
+__global Shape* gShapes,
+__global Constraint4* gConstraints,
+__global int* gN,
+__global int* gOffsets,
 ConstBufferBatchSolve cb)
 {
 	__local int ldsBatchIdx[WG_SIZE+1];
@@ -729,14 +729,14 @@ ConstBufferBatchSolve cb)
 	int xIdx = (wgIdx/(nSplit/2))*2 + (bIdx&1);
 	int yIdx = (wgIdx%(nSplit/2))*2 + (bIdx>>1);
 	int cellIdx = xIdx+yIdx*nSplit;
-	
-	if( gN[cellIdx] == 0 ) 
+
+	if( gN[cellIdx] == 0 )
 		return;
 
 	const int start = gOffsets[cellIdx];
 	const int end = start + gN[cellIdx];
 
-	
+
 	if( lIdx == 0 )
 	{
 		ldsCurBatch = 0;
@@ -771,7 +771,7 @@ ConstBufferBatchSolve cb)
 		}
 		GROUP_LDS_BARRIER;
 	}
-	
+
 	return;
 
 
@@ -790,7 +790,7 @@ ConstBufferBatchSolve cb)
 		{
 			counter1++;
 			int idx = curStart + lIdx;
-			if( lIdx == 0 ) 
+			if( lIdx == 0 )
 				ldsBatchIdx[0] = curBatch;
 				GROUP_LDS_BARRIER;
 			ldsBatchIdx[(lIdx == 0)? lIdx:lIdx+1] = curBatch;
@@ -898,8 +898,8 @@ void SetSortDataKernel(__global Contact4* gContact, __global Body* gBodies, __gl
 }
 
 
-void setConstraint4( const float4 posA, const float4 linVelA, const float4 angVelA, float invMassA, const Matrix3x3 invInertiaA, 
-	const float4 posB, const float4 linVelB, const float4 angVelB, float invMassB, const Matrix3x3 invInertiaB, 
+void setConstraint4( const float4 posA, const float4 linVelA, const float4 angVelA, float invMassA, const Matrix3x3 invInertiaA,
+	const float4 posB, const float4 linVelB, const float4 angVelB, float invMassB, const Matrix3x3 invInertiaB,
 	Contact4 src, float dt, float positionDrift, float positionConstraintCoeff,
 	Constraint4* dstC )
 {
@@ -1030,9 +1030,9 @@ void ContactToConstraintKernel(__global Contact4* gContact, __global Body* gBodi
 		Constraint4 cs;
 
 		setConstraint4( posA, linVelA, angVelA, invMassA, invInertiaA, posB, linVelB, angVelB, invMassB, invInertiaB,
-			gContact[gIdx], dt, positionDrift, positionConstraintCoeff, 
+			gContact[gIdx], dt, positionDrift, positionConstraintCoeff,
 			&cs );
-		
+
 		cs.m_batchIdx = gContact[gIdx].m_batchIdx;
 
 		gConstraintOut[gIdx] = cs;

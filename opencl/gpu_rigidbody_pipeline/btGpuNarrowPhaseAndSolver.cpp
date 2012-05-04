@@ -1,10 +1,10 @@
 /*
-Copyright (c) 2012 Advanced Micro Devices, Inc.  
+Copyright (c) 2012 Advanced Micro Devices, Inc.
 
 This software is provided 'as-is', without any express or implied warranty.
 In no event will the authors be held liable for any damages arising from the use of this software.
-Permission is granted to anyone to use this software for any purpose, 
-including commercial applications, and to alter it and redistribute it freely, 
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it freely,
 subject to the following restrictions:
 
 1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
@@ -61,7 +61,7 @@ struct	CustomDispatchData
 	adl::Buffer<Contact4>* m_pBufContactOutGPU;
 	adl::HostBuffer<Contact4>* m_pBufContactOutCPU;
 	adl::ChNarrowphase<adl::TYPE_CL>::Data* m_Data;
-	
+
 
 
 	adl::HostBuffer<RigidBodyBase::Body>* m_bodyBufferCPU;
@@ -97,7 +97,7 @@ btGpuNarrowphaseAndSolver::btGpuNarrowphaseAndSolver(adl::DeviceCL* deviceCL)
 
 		m_internalData->m_convexPairsOutGPU = new adl::Buffer<int2>(m_internalData->m_deviceCL,MAX_BROADPHASE_COLLISION_CL);
 		m_internalData->m_planePairs = new adl::Buffer<int2>(m_internalData->m_deviceCL,MAX_BROADPHASE_COLLISION_CL);
-		
+
 		m_internalData->m_pBufContactOutCPU = new adl::HostBuffer<Contact4>(m_internalData->m_deviceHost, MAX_BROADPHASE_COLLISION_CL);
 		m_internalData->m_bodyBufferCPU = new adl::HostBuffer<RigidBodyBase::Body>(m_internalData->m_deviceHost, MAX_CONVEX_BODIES_CL);
 
@@ -109,9 +109,9 @@ btGpuNarrowphaseAndSolver::btGpuNarrowphaseAndSolver(adl::DeviceCL* deviceCL)
 		m_internalData->m_bodyBufferGPU = new adl::Buffer<RigidBodyBase::Body>(m_internalData->m_deviceCL, MAX_CONVEX_BODIES_CL);
 		m_internalData->m_Data = adl::ChNarrowphase<adl::TYPE_CL>::allocate(m_internalData->m_deviceCL);
 //		m_internalData->m_DataCPU = adl::ChNarrowphase<adl::TYPE_HOST>::allocate(m_internalData->m_deviceHost);
-		
 
-		m_internalData->m_ShapeBuffer = adl::ChNarrowphase<adl::TYPE_CL>::allocateShapeBuffer(m_internalData->m_deviceCL, MAX_CONVEX_SHAPES_CL);	
+
+		m_internalData->m_ShapeBuffer = adl::ChNarrowphase<adl::TYPE_CL>::allocateShapeBuffer(m_internalData->m_deviceCL, MAX_CONVEX_SHAPES_CL);
 
 		m_internalData->m_shapePointers = new adl::HostBuffer<ConvexHeightField*>(m_internalData->m_deviceHost,MAX_CONVEX_SHAPES_CL);
 
@@ -166,7 +166,7 @@ int btGpuNarrowphaseAndSolver::registerRigidBody(int shapeIndex, float mass, con
 	{
 		body.m_shapeType = CollisionShape::SHAPE_CONVEX_HEIGHT_FIELD;
 	}
-	
+
 	body.m_invMass = mass? 1.f/mass : 0.f;
 
 	if (writeToGpu)
@@ -249,10 +249,10 @@ btGpuNarrowphaseAndSolver::~btGpuNarrowphaseAndSolver(void)
 		delete m_internalData->m_bodyBufferCPU;
 		adl::ChNarrowphase<adl::TYPE_CL>::deallocate(m_internalData->m_Data);
 
-		
+
 
 		adl::DeviceUtils::deallocate(m_internalData->m_deviceHost);
-		
+
 		delete m_internalData;
 	}
 
@@ -262,7 +262,7 @@ btGpuNarrowphaseAndSolver::~btGpuNarrowphaseAndSolver(void)
 
 
 
-void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs, int numBroadphasePairs) 
+void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs, int numBroadphasePairs)
 {
 
 	BT_PROFILE("computeContactsAndSolver");
@@ -292,8 +292,8 @@ void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs,
 		adl::DeviceUtils::waitForCompletion(m_internalData->m_deviceCL);
 
 		numPairsOut = adl::ChNarrowphase<adl::TYPE_CL>::culling(
-			m_internalData->m_Data, 
-			&broadphasePairsGPU, 
+			m_internalData->m_Data,
+			&broadphasePairsGPU,
 			numBroadphasePairs,
 			m_internalData->m_bodyBufferGPU, m_internalData->m_ShapeBuffer,
 			m_internalData->m_convexPairsOutGPU,
@@ -304,7 +304,7 @@ void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs,
 		BT_PROFILE("ChNarrowphase::execute");
 		if (useCulling)
 		{
-		
+
 			if (m_planeBodyIndex>=0)
 			{
 				BT_PROFILE("ChNarrowphase:: plane versus convex");
@@ -325,10 +325,10 @@ void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs,
 				adl::DeviceUtils::waitForCompletion(m_internalData->m_deviceCL);
 				delete[]hostPairs;
 				//convex versus plane
-				adl::ChNarrowphase<adl::TYPE_CL>::execute(m_internalData->m_Data, m_internalData->m_planePairs, index, m_internalData->m_bodyBufferGPU, m_internalData->m_ShapeBuffer, 
+				adl::ChNarrowphase<adl::TYPE_CL>::execute(m_internalData->m_Data, m_internalData->m_planePairs, index, m_internalData->m_bodyBufferGPU, m_internalData->m_ShapeBuffer,
 					0,0,m_internalData->m_pBufContactOutGPU, nContactOut, cfgNP);
 			}
-		
+
 			//convex versus convex
 			adl::ChNarrowphase<adl::TYPE_CL>::execute(m_internalData->m_Data, m_internalData->m_convexPairsOutGPU,numPairsOut, m_internalData->m_bodyBufferGPU, m_internalData->m_ShapeBuffer, m_internalData->m_pBufContactOutGPU, nContactOut, cfgNP);
 		} else
@@ -338,22 +338,22 @@ void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs,
 
 		adl::DeviceUtils::waitForCompletion(m_internalData->m_deviceCL);
 	}
-	
+
 	if (!nContactOut)
 		return;
-	
-	
+
+
 	bool useSolver = true;//true;//false;
 
 	if (useSolver)
 	{
-		float dt=1./60.;
+		float dt=1./200.;
 		adl::SolverBase::ConstraintCfg csCfg( dt );
 		csCfg.m_enableParallelSolve = true;
 		csCfg.m_averageExtent = 0.2f;//@TODO m_averageObjExtent;
 		csCfg.m_staticIdx = m_planeBodyIndex;
 
-		
+
 		bool exposeInternalBatchImplementation=true;
 
 		adl::Solver<adl::TYPE_HOST>::Data* cpuSolverData = 0;
@@ -500,10 +500,10 @@ void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs,
 							if (gpuBoundSearch)
 							{	//	4. find entries
 								BT_PROFILE("gpuBoundSearch");
-								adl::BoundSearch<adl::TYPE_CL>::execute( data->m_search, *data->m_sortDataBuffer, nContacts, *countsNative, 
+								adl::BoundSearch<adl::TYPE_CL>::execute( data->m_search, *data->m_sortDataBuffer, nContacts, *countsNative,
 									adl::SolverBase::N_SPLIT*adl::SolverBase::N_SPLIT, adl::BoundSearchBase::COUNT );
 
-								adl::PrefixScan<adl::TYPE_CL>::execute( data->m_scan, *countsNative, *offsetsNative, 
+								adl::PrefixScan<adl::TYPE_CL>::execute( data->m_scan, *countsNative, *offsetsNative,
 									adl::SolverBase::N_SPLIT*adl::SolverBase::N_SPLIT );
 							} else
 							{
@@ -575,7 +575,7 @@ void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs,
 						launcher.launch1D( nContacts, 64 );
 						adl::DeviceUtils::waitForCompletion( data->m_device );
 					}
-					
+
 					bool compareGPU = false;
 					if (gpuBatchContacts)
 					{
@@ -686,14 +686,14 @@ void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs,
 		} else
 		{
 			BT_PROFILE("GPU reorderConvertToConstraints");
-			adl::Solver<adl::TYPE_CL>::reorderConvertToConstraints( 
-				m_internalData->m_solverDataGPU, 
-				m_internalData->m_bodyBufferGPU, 
-				m_internalData->m_inertiaBufferGPU, 
+			adl::Solver<adl::TYPE_CL>::reorderConvertToConstraints(
+				m_internalData->m_solverDataGPU,
+				m_internalData->m_bodyBufferGPU,
+				m_internalData->m_inertiaBufferGPU,
 				m_internalData->m_pBufContactOutGPU,
-				m_internalData->m_contactCGPU, 
-				m_internalData->m_frictionCGPU, 
-				nContactOut, 
+				m_internalData->m_contactCGPU,
+				m_internalData->m_frictionCGPU,
+				nContactOut,
 				csCfg );
 			adl::DeviceUtils::waitForCompletion( m_internalData->m_deviceCL );
 		}
@@ -704,11 +704,11 @@ void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs,
 			BT_PROFILE("GPU solveContactConstraint");
 			m_internalData->m_solverDataGPU->m_nIterations = 5;
 
-			adl::Solver<adl::TYPE_CL>::solveContactConstraint( m_internalData->m_solverDataGPU, 
-				m_internalData->m_bodyBufferGPU, 
-				m_internalData->m_inertiaBufferGPU, 
+			adl::Solver<adl::TYPE_CL>::solveContactConstraint( m_internalData->m_solverDataGPU,
+				m_internalData->m_bodyBufferGPU,
+				m_internalData->m_inertiaBufferGPU,
 				m_internalData->m_contactCGPU,
-				0, 
+				0,
 				nContactOut );
 
 			adl::DeviceUtils::waitForCompletion( m_internalData->m_deviceCL );

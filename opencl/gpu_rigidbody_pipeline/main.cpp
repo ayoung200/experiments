@@ -1,10 +1,10 @@
 /*
-Copyright (c) 2012 Advanced Micro Devices, Inc.  
+Copyright (c) 2012 Advanced Micro Devices, Inc.
 
 This software is provided 'as-is', without any express or implied warranty.
 In no event will the authors be held liable for any damages arising from the use of this software.
-Permission is granted to anyone to use this software for any purpose, 
-including commercial applications, and to alter it and redistribute it freely, 
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it freely,
 subject to the following restrictions:
 
 1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
@@ -14,13 +14,13 @@ subject to the following restrictions:
 //Originally written by Erwin Coumans
 
 
-int NUM_OBJECTS_X = 54;
-int NUM_OBJECTS_Y = 35;
-int NUM_OBJECTS_Z = 54;
+int NUM_OBJECTS_X = 2;
+int NUM_OBJECTS_Y = 2;
+int NUM_OBJECTS_Z = 2;
 
 float X_GAP = 12.f;
-float Y_GAP = 2.f;
-float Z_GAP = 2.f;
+float Y_GAP = 10.f;
+float Z_GAP = 10.f;
 
 int preferredGPU = -1;
 int preferredPlatform=-1;
@@ -69,7 +69,7 @@ btAlignedObjectArray<btBroadphaseProxy*> proxyArray;
 
 int gShapeIndex=0;
 
-
+bool paused = true;
 #define RS_SCALE (1.0 / (1.0 + RAND_MAX))
 
 
@@ -83,7 +83,7 @@ int randbiased (double x) {
     }
 }
 
-size_t randrange (size_t n) 
+size_t randrange (size_t n)
 {
     double xhi;
     double resolution = n * RS_SCALE;
@@ -147,7 +147,7 @@ bool printStats = true;
 bool runOpenCLKernels = true;
 
 #define MSTRINGIFY(A) #A
-static char* interopKernelString = 
+static char* interopKernelString =
 #include "../broadphase_benchmark/integrateKernel.cl"
 
 #define INTEROPKERNEL_SRC_PATH "../../opencl/broadphase_benchmark/integrateKernel.cl"
@@ -158,8 +158,8 @@ btGpuNarrowphaseAndSolver* narrowphaseAndSolver =0;
 
 
 btStopwatch gStopwatch;
-int m_glutScreenWidth = 640;
-int m_glutScreenHeight= 480;
+int m_glutScreenWidth = 1920;
+int m_glutScreenHeight= 1080;
 
 bool m_ortho = false;
 
@@ -357,14 +357,14 @@ bool gltLoadShaderFile(const char *szFile, GLuint shader)
 		fclose(fp);
 	}
 	else
-		return false;    
+		return false;
 
 	//	printf(shaderText);
 	// Load the string
 	gltLoadShaderSrc((const char *)shaderText, shader);
 
 	return true;
-}   
+}
 
 
 /////////////////////////////////////////////////////////////////
@@ -375,8 +375,8 @@ GLuint gltLoadShaderPair(const char *szVertexProg, const char *szFragmentProg, b
 {
 	// Temporary Shader objects
 	GLuint hVertexShader;
-	GLuint hFragmentShader; 
-	GLuint hReturn = 0;   
+	GLuint hFragmentShader;
+	GLuint hReturn = 0;
 	GLint testVal;
 
 	// Create shader objects
@@ -444,7 +444,7 @@ GLuint gltLoadShaderPair(const char *szVertexProg, const char *szFragmentProg, b
 
 	// These are no longer needed
 	glDeleteShader(hVertexShader);
-	glDeleteShader(hFragmentShader);  
+	glDeleteShader(hFragmentShader);
 
 	// Make sure link worked too
 	glGetProgramiv(hReturn, GL_LINK_STATUS, &testVal);
@@ -454,8 +454,8 @@ GLuint gltLoadShaderPair(const char *szVertexProg, const char *szFragmentProg, b
 		return (GLuint)NULL;
 	}
 
-	return hReturn;  
-}   
+	return hReturn;
+}
 
 ///position xyz, unused w, normal, uv
 static const GLfloat cube_vertices[] =
@@ -508,7 +508,7 @@ int m_mouseButtons = 0;
 
 void mouseFunc(int button, int state, int x, int y)
 {
-	if (state == 0) 
+	if (state == 0)
 	{
         m_mouseButtons |= 1<<button;
     } else
@@ -524,7 +524,7 @@ void mouseFunc(int button, int state, int x, int y)
 btVector3	getRayTo(int x,int y)
 {
 
-	
+
 
 	if (m_ortho)
 	{
@@ -533,14 +533,14 @@ btVector3	getRayTo(int x,int y)
 		btVector3 extents;
 		aspect = m_glutScreenWidth / (btScalar)m_glutScreenHeight;
 		extents.setValue(aspect * 1.0f, 1.0f,0);
-		
+
 		extents *= m_cameraDistance;
 		btVector3 lower = m_cameraTargetPosition - extents;
 		btVector3 upper = m_cameraTargetPosition + extents;
 
 		btScalar u = x / btScalar(m_glutScreenWidth);
 		btScalar v = (m_glutScreenHeight - y) / btScalar(m_glutScreenHeight);
-		
+
 		btVector3	p(0,0,0);
 		p.setValue((1.0f - u) * lower.getX() + u * upper.getX(),(1.0f - v) * lower.getY() + v * upper.getY(),m_cameraTargetPosition.getZ());
 		return p;
@@ -574,9 +574,9 @@ btVector3	getRayTo(int x,int y)
 	vertical *= 2.f * farPlane * tanfov;
 
 	btScalar aspect;
-	
+
 	aspect = m_glutScreenWidth / (btScalar)m_glutScreenHeight;
-	
+
 	hor*=aspect;
 
 
@@ -624,20 +624,20 @@ void mouseMotionFunc(int x, int y)
 		if(m_mouseButtons & (2 << 2) && m_mouseButtons & 1)
 		{
 		}
-		else if(m_mouseButtons & 1) 
+		else if(m_mouseButtons & 1)
 		{
 			m_azi += dx * btScalar(0.2);
 			m_azi = fmodf(m_azi, btScalar(360.f));
 			m_ele += dy * btScalar(0.2);
 			m_ele = fmodf(m_ele, btScalar(180.f));
-		} 
-		else if(m_mouseButtons & 4) 
+		}
+		else if(m_mouseButtons & 4)
 		{
 			m_cameraDistance -= dy * btScalar(0.02f);
 			if (m_cameraDistance<btScalar(0.1))
 				m_cameraDistance = btScalar(0.1);
 
-			
+
 		}
 		}
 	}
@@ -678,7 +678,7 @@ void InitCL(int preferredDeviceIndex, int preferredPlatformIndex)
 	cl_device_type deviceType = CL_DEVICE_TYPE_GPU;
 #endif
 
-	
+
 
 	if (USE_GL_CL_INTEROP)
 	{
@@ -733,7 +733,7 @@ void DeleteShaders()
 
 void InitShaders()
 {
-	
+
 	btOverlappingPairCache* overlappingPairCache=0;
 	int maxObjects = btMax(256,NUM_OBJECTS);
 #ifdef	USE_NEW
@@ -773,7 +773,7 @@ void InitShaders()
 	instance_colors_ptr = (GLfloat*)new float[NUM_OBJECTS*4];
 	instance_scale_ptr = (GLfloat*)new float[NUM_OBJECTS*3];
 
-	
+
 
 	int index=0;
 	for (int i=0;i<NUM_OBJECTS_X;i++)
@@ -784,8 +784,8 @@ void InitShaders()
 			{
 				instance_positions_ptr[index*4]=(i*X_GAP-NUM_OBJECTS_X/2);
 				instance_positions_ptr[index*4+1]=(j*Y_GAP-NUM_OBJECTS_Y/2);
-				instance_positions_ptr[index*4+2]=(k*Z_GAP-NUM_OBJECTS_Z/2)+(j&1);
-				
+				instance_positions_ptr[index*4+2]=(k*Z_GAP-NUM_OBJECTS_Z/2);//+(j&1);
+
 				instance_positions_ptr[index*4+3]=1;
 
 				int shapeType =0;
@@ -828,14 +828,14 @@ void InitShaders()
 		}
 	}
 
-	float posZero[4] = {0,-NUM_OBJECTS_Y/2.0f-1,0,0};
+	float posZero[4] = {0,-NUM_OBJECTS_Y/2.0f-Y_GAP,0,0};
 	float ornZero[4] = {0,0,0,1};
 
 	//register a 'plane'
 	if (narrowphaseAndSolver)
 			narrowphaseAndSolver->registerRigidBody(-1, 0.f, posZero,ornZero,false);
 
-	
+
 
 	if (narrowphaseAndSolver)
 		narrowphaseAndSolver->writeAllBodiesToGpu();
@@ -893,14 +893,14 @@ void InitShaders()
 
 
 
-void updateCamera() 
+void updateCamera()
 {
 
 
-	
+
 	btVector3 m_cameraUp(0,1,0);
 	int m_forwardAxis=2;
-	
+
 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
@@ -940,11 +940,11 @@ void updateCamera()
 	float aspect;
 	btVector3 extents;
 
-	if (m_glutScreenWidth > m_glutScreenHeight) 
+	if (m_glutScreenWidth > m_glutScreenHeight)
 	{
 		aspect = m_glutScreenWidth / (float)m_glutScreenHeight;
 		extents.setValue(aspect * 1.0f, 1.0f,0);
-	} else 
+	} else
 	{
 		aspect = m_glutScreenHeight / (float)m_glutScreenWidth;
 		extents.setValue(1.0f, aspect*1.f,0);
@@ -964,17 +964,17 @@ void updateCamera()
 		glLoadIdentity();
 	} else
 	{
-		if (m_glutScreenWidth > m_glutScreenHeight) 
+		if (m_glutScreenWidth > m_glutScreenHeight)
 		{
 			glFrustum (-aspect * m_frustumZNear, aspect * m_frustumZNear, -m_frustumZNear, m_frustumZNear, m_frustumZNear, m_frustumZFar);
-		} else 
+		} else
 		{
 			glFrustum (-aspect * m_frustumZNear, aspect * m_frustumZNear, -m_frustumZNear, m_frustumZNear, m_frustumZNear, m_frustumZFar);
 		}
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
-		gluLookAt(m_cameraPosition[0], m_cameraPosition[1], m_cameraPosition[2], 
-			m_cameraTargetPosition[0], m_cameraTargetPosition[1], m_cameraTargetPosition[2], 
+		gluLookAt(m_cameraPosition[0], m_cameraPosition[1], m_cameraPosition[2],
+			m_cameraTargetPosition[0], m_cameraTargetPosition[1], m_cameraTargetPosition[2],
 			m_cameraUp.getX(),m_cameraUp.getY(),m_cameraUp.getZ());
 	}
 
@@ -1052,7 +1052,7 @@ void myinit()
 
 					/*
 					const int		s=x>>5;
-					const GLubyte	b=180;					
+					const GLubyte	b=180;
 					GLubyte			c=b+((s+t&1)&1)*(255-b);
 					pi[0]=c;
 					pi[1]=c;
@@ -1087,7 +1087,7 @@ void myinit()
 	}
 
 	glEnable(GL_COLOR_MATERIAL);
-	 
+
 	err = glGetError();
 	assert(err==GL_NO_ERROR);
 
@@ -1165,13 +1165,15 @@ void cpuBroadphase()
 
 void	simulationLoop()
 {
+    if(!paused)
+    {
 	BT_PROFILE("simulationLoop");
 
 	if (useCPU)
 	{
 		cpuBroadphase();
 
-	} 
+	}
 	else
 	{
 		{
@@ -1189,7 +1191,7 @@ void	simulationLoop()
 			adl::DeviceUtils::waitForCompletion( g_deviceCL );
 		} else
 		{
-			
+
 			BT_PROFILE("glMapBuffer and clEnqueueWriteBuffer");
 
 			blocking=  CL_TRUE;
@@ -1197,7 +1199,7 @@ void	simulationLoop()
 			if (!clBuffer)
 			{
 				clBuffer = clCreateBuffer(g_cxMainContext, CL_MEM_READ_WRITE, VBOsize, 0, &ciErrNum);
-			} 
+			}
 			adl::DeviceUtils::waitForCompletion( g_deviceCL );
 			ciErrNum = clEnqueueWriteBuffer (	g_cqCommandQue,
  				clBuffer,
@@ -1220,8 +1222,8 @@ void	simulationLoop()
 			gFpIO.m_positionOffset = (sizeof(cube_vertices) )/4;
 			gFpIO.m_clObjectsBuffer = clBuffer;
 			gFpIO.m_dAABB = sBroadphase->m_dAABB;
-			
-			
+
+
 			{
 				BT_PROFILE("setupGpuAabbs");
 				setupGpuAabbsSimple(gFpIO);
@@ -1253,7 +1255,7 @@ void	simulationLoop()
 					BT_PROFILE("copyBodyVelocities");
 					if (narrowphaseAndSolver)
 						copyBodyVelocities(gFpIO, gLinVelMem, gAngVelMem, narrowphaseAndSolver->getBodiesGpu(), narrowphaseAndSolver->getBodyInertiasGpu());
-				}		
+				}
 			} else
 			{
 				printf("error, gFpIO.m_numOverlap = %d\n",gFpIO.m_numOverlap);
@@ -1278,13 +1280,13 @@ void	simulationLoop()
 					ciErrNum = clSetKernelArg(g_integrateTransformsKernel, 3, sizeof(cl_mem), (void*)&gLinVelMem);
 					ciErrNum = clSetKernelArg(g_integrateTransformsKernel, 4, sizeof(cl_mem), (void*)&gAngVelMem);
 					ciErrNum = clSetKernelArg(g_integrateTransformsKernel, 5, sizeof(cl_mem), (void*)&gBodyTimes);
-					
-					
-					
+
+
+
 
 					size_t workGroupSize = 64;
 					size_t	numWorkItems = workGroupSize*((NUM_OBJECTS + (workGroupSize)) / workGroupSize);
-				
+
 					if (workGroupSize>numWorkItems)
 						workGroupSize=numWorkItems;
 
@@ -1292,7 +1294,7 @@ void	simulationLoop()
 					oclCHECKERROR(ciErrNum, CL_SUCCESS);
 				}
 			}
-			
+
 
 		}
 
@@ -1331,6 +1333,7 @@ void	simulationLoop()
 
 
 	}
+    }
 }
 
 
@@ -1341,7 +1344,7 @@ void RenderScene(void)
 {
 	 BT_PROFILE("GlutDisplayFunc");
 
-	 
+
 #if 0
 	float modelview[20]={0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9};
 	// get the current modelview matrix
@@ -1354,7 +1357,7 @@ void RenderScene(void)
 
 	updateCamera();
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	//render coordinate system
 	glBegin(GL_LINES);
@@ -1433,7 +1436,7 @@ void RenderScene(void)
 	glVertexAttribDivisor(4, 0);
 	glVertexAttribDivisor(5, 1);
 	glVertexAttribDivisor(6, 1);
-	
+
 	glUseProgram(instancingShader);
 	glUniform1f(angle_loc, 0);
 	GLfloat pm[16];
@@ -1459,6 +1462,25 @@ void RenderScene(void)
 	glUseProgram(0);
 	glBindBuffer(GL_ARRAY_BUFFER,0);
 	glBindVertexArray(0);
+
+    glDisable(GL_TEXTURE_2D);
+
+	//glDisable(GL_COLOR_MATERIAL);
+	glColor3f(0.5f,0.8f,0.2f);
+	float yoffset = Y_GAP;
+    glBegin(GL_QUADS);
+        glNormal3f(0.0f,1.0f,0.0f);
+        glVertex3f(-128.0f, -NUM_OBJECTS_Y/2.0f-yoffset, 128.0f);
+        glNormal3f(0.0f,1.0f,0.0f);
+        glVertex3f( 128.0f, -NUM_OBJECTS_Y/2.0f-yoffset, 128.0f);
+        glNormal3f(0.0f,1.0f,0.0f);
+        glVertex3f( 128.0f,-NUM_OBJECTS_Y/2.0f-yoffset, -128.0f);
+        glNormal3f(0.0f,1.0f,0.0f);
+        glVertex3f(-128.0f,-NUM_OBJECTS_Y/2.0f-yoffset, -128.0f);
+    glEnd();
+
+    glEnable(GL_TEXTURE_2D);
+	//glEnable(GL_COLOR_MATERIAL);
 
 	glutSwapBuffers();
 	glutPostRedisplay();
@@ -1509,7 +1531,7 @@ void ChangeSize(int w, int h)
 #ifdef RECREATE_CL_AND_SHADERS_ON_RESIZE
 	InitCL();
 	InitShaders();
-	
+
 	g_interopBuffer = new btOpenCLGLInteropBuffer(g_cxMainContext,g_cqCommandQue,cube_vbo);
 	clFinish(g_cqCommandQue);
 	g_integrateTransformsKernel = btOpenCLUtils::compileCLKernelFromString(g_cxMainContext, interopKernelString, "interopKernel" );
@@ -1556,6 +1578,9 @@ void Keyboard(unsigned char key, int x, int y)
 	case 'q':
 	case 'Q':
 		exit(0);
+    case ' ':
+		paused=!paused;
+		break;
 	default:
 		break;
 	}
@@ -1572,7 +1597,7 @@ void ShutdownRC(void)
 
 void Usage()
 {
-	printf("\nprogram.exe [--preferred_gpu=<int>] [--batch_gpu=<0,1>] [--preferred_platform=<int>] [--enable_interop=<0 or 1>] [--x_dim=<int>] [--y_dim=<num>] [--z_dim=<int>] [--x_gap=<float>] [--y_gap=<float>] [--z_gap=<float>]\n"); 
+	printf("\nprogram.exe [--preferred_gpu=<int>] [--batch_gpu=<0,1>] [--preferred_platform=<int>] [--enable_interop=<0 or 1>] [--x_dim=<int>] [--y_dim=<num>] [--z_dim=<int>] [--x_gap=<float>] [--y_gap=<float>] [--z_gap=<float>]\n");
 	printf("\n");
 	printf("preferred_gpu      : the index used for OpenCL, in case multiple OpenCL-capable GPU are available. This is ignored if interop is enabled");
 	printf("preferred_platform : the platform index used for OpenCL, in case multiple OpenCL-capable platforms are available. This is ignored if interop is enabled");
@@ -1592,7 +1617,7 @@ int main(int argc, char* argv[])
 		Usage();
 		return 0;
 	}
-	
+
 	args.GetCmdLineArgument("x_dim", NUM_OBJECTS_X);
 	args.GetCmdLineArgument("y_dim", NUM_OBJECTS_Y);
 	args.GetCmdLineArgument("z_dim", NUM_OBJECTS_Z);
@@ -1605,13 +1630,13 @@ int main(int argc, char* argv[])
 	args.GetCmdLineArgument("preferred_gpu", preferredGPU);
 	args.GetCmdLineArgument("preferred_platform", preferredPlatform);
 	args.GetCmdLineArgument("batch_gpu", gpuBatchContacts);
-	
 
-	
+
+
 
 	printf("Dimensions (%d,%d,%d) with gap (%f,%f,%f), using interop=%d, gpu %d, cl platform %d, gpuBatchContacts %d \n",NUM_OBJECTS_X,NUM_OBJECTS_Y,NUM_OBJECTS_Z,X_GAP,Y_GAP,Z_GAP,USE_GL_CL_INTEROP,preferredGPU, preferredPlatform,gpuBatchContacts);
-		
-	
+
+
 
 
 	{
@@ -1660,9 +1685,9 @@ int main(int argc, char* argv[])
 
 	//ChangeSize(m_glutScreenWidth,m_glutScreenHeight);
 
-	
+
 	InitCL(preferredGPU, preferredPlatform);
-	
+
 
 #define CUSTOM_CL_INITIALIZATION
 #ifdef CUSTOM_CL_INITIALIZATION
@@ -1699,7 +1724,7 @@ int main(int argc, char* argv[])
 			{
 				for (int k=0;k<NUM_OBJECTS_Z;k++)
 				{
-	
+
 					if (j)
 					{
 						linVelHost[index].setValue(0,0,0);
@@ -1752,7 +1777,7 @@ int main(int argc, char* argv[])
 		gShapeIndex = narrowphaseAndSolver->registerShape(s_convexHeightField);
 
 	InitShaders();
-	
+
 	if (USE_GL_CL_INTEROP)
 	{
 		g_interopBuffer = new btOpenCLGLInteropBuffer(g_cxMainContext,g_cqCommandQue,cube_vbo);
@@ -1762,11 +1787,11 @@ int main(int argc, char* argv[])
 
 	cl_program prog = btOpenCLUtils::compileCLProgramFromString(g_cxMainContext,g_device,interopKernelString,0,"",INTEROPKERNEL_SRC_PATH);
 	g_integrateTransformsKernel = btOpenCLUtils::compileCLKernelFromString(g_cxMainContext, g_device,interopKernelString, "integrateTransformsKernel" ,0,prog);
-	
+
 
 	initFindPairs(gFpIO, g_cxMainContext, g_device, g_cqCommandQue, NUM_OBJECTS);
 
-	
+
 
 
 
