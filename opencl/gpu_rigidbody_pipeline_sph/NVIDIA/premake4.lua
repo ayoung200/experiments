@@ -21,7 +21,7 @@
 		"../../primitives",
 		"../../../bullet2"
 		}
-		libdirs{"./EnjaParticles/build"}
+		libdirs{"../EnjaParticles/build/rtpslib"}
 	        links{"rtps"}	
 		files {
 			"../main.cpp",

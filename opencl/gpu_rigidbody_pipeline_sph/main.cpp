@@ -18,7 +18,7 @@ int NUM_OBJECTS_X = 2;
 int NUM_OBJECTS_Y = 2;
 int NUM_OBJECTS_Z = 2;
 
-float X_GAP = 12.f;
+float X_GAP = 2.f;
 float Y_GAP = 2.f;
 float Z_GAP = 2.f;
 
@@ -27,7 +27,7 @@ int preferredPlatform=-1;
 int USE_GL_CL_INTEROP=1;
 extern int gpuBatchContacts;
 
-
+#define __CL_ENABLE_EXCEPTIONS
 #include <GL/glew.h>
 #include <stdio.h>
 
@@ -153,6 +153,7 @@ rtps::ShaderLibrary* lib=0;
 rtps::ParticleEffect* sphereRenderer=0;
 rtps::SSEffect* ssRenderer=0;
 rtps::MeshEffect* meshRenderer=0;
+rtps::RTPSSettings* settings=0;
 
 
 
@@ -172,8 +173,8 @@ btGpuNarrowphaseAndSolver* narrowphaseAndSolver =0;
 
 
 btStopwatch gStopwatch;
-int m_glutScreenWidth = 1920;
-int m_glutScreenHeight= 1080;
+int m_glutScreenWidth = 1280;
+int m_glutScreenHeight= 768;
 
 bool m_ortho = false;
 
@@ -1182,11 +1183,14 @@ void	simulationLoop()
     if(!paused)
     {
 	BT_PROFILE("simulationLoop");
+    glFinish();
+    sph->acquireGLBuffers();
+    sph->update();
+    sph->interact();
 
 	if (useCPU)
 	{
 		cpuBroadphase();
-
 	}
 	else
 	{
@@ -1347,6 +1351,9 @@ void	simulationLoop()
 
 
 	}
+    sph->integrate();
+    sph->postProcess();
+    sph->releaseGLBuffers();
     }
 }
 
@@ -1492,7 +1499,19 @@ void RenderScene(void)
         glNormal3f(0.0f,1.0f,0.0f);
         glVertex3f(-128.0f,-NUM_OBJECTS_Y/2.0f-yoffset, -128.0f);
     glEnd();
+    rtps::Light light;
+    light.diffuse.x=1.0;light.diffuse.y=1.0;light.diffuse.z=1.0;
+    //light.ambient.x=0.3;light.ambient.y=0.3;light.ambient.z=0.3;
+    light.ambient.x=1.0;light.ambient.y=1.0;light.ambient.z=1.0;
+    light.specular.x=1.0;light.specular.y=1.0;light.specular.z=1.0;
+    light.pos.x=-0.5f; light.pos.y=1.5f; light.pos.z=5.0f;
+    rtps::Mesh* mcMesh = sph->getMCMesh();
+    //if(mcMesh)
+    //    meshRenderer->render(mcMesh,light);
+    //else
 
+        sphereRenderer->render(sph->getPosVBO(),sph->getColVBO(),sph->getNum());
+        //ssRenderer->render(sph->getPosVBO(),sph->getColVBO(),sph->getNum());
     glEnable(GL_TEXTURE_2D);
 	//glEnable(GL_COLOR_MATERIAL);
 
@@ -1500,7 +1519,7 @@ void RenderScene(void)
 	glutPostRedisplay();
 
 	GLint err = glGetError();
-	assert(err==GL_NO_ERROR);
+	//assert(err==GL_NO_ERROR);
 }
 
 extern int numPairsOut;
@@ -1592,6 +1611,16 @@ void Keyboard(unsigned char key, int x, int y)
 	case 'q':
 	case 'Q':
 		exit(0);
+    case 'g':
+    {
+        unsigned int n = sph->getSettings()->GetSettingAs<unsigned int>("max_num_particles")/2;
+        rtps::float4 col1 = rtps::float4(0.05f, 0.15f, .8f, 0.1f);
+        //sph->getSettings()->GetSettingAs<rtps::float4>("grid_min")
+        //sph->getSettings()->GetSettingAs<rtps::float4>("grid_max")
+        sph->addBox(n, rtps::float4(1.0f,1.0f,1.0f,0.0f)+rtps::float4(0.5f,0.5f,0.5f,1.0f),  rtps::float4(10.0f,10.0f,10.0f,0.0f)-rtps::float4(0.5f,0.5f,0.5f,1.0f), false,col1);
+        //ps2->system->addBox(nn, min, max, false);
+    }
+        break;
     case ' ':
 		paused=!paused;
 		break;
@@ -1711,15 +1740,26 @@ int main(int argc, char* argv[])
 	g_deviceCL->m_commandQueue = g_cqCommandQue;
 	g_deviceCL->m_kernelManager = new adl::KernelManager;
 	rtpsCL=new rtps::CL(cl::Context(g_cxMainContext),cl::CommandQueue(g_cqCommandQue),cl::Device(g_device));
-	rtps::RTPSSettings settings;
+	string filepath=argv[0];
+    unsigned int pos=0;
+
+#ifdef WIN32
+    pos=filepath.rfind("\\");
+#else
+    pos=filepath.rfind("/");
+#endif
+    filepath=filepath.substr(0,pos+1);
+	settings = new rtps::RTPSSettings();
 	settings->SetSetting("system","sph");
 	settings->SetSetting("sub_intervals",1);
     settings->SetSetting("domain_min","0.0 0.0 0.0 0.0");
-    settings->SetSetting("domain_max","128.0 128.0 128.0 0.0");
+    settings->SetSetting("domain_max","10.0 10.0 10.0 0.0");
+    //settings->SetSetting("domain_max","128.0 128.0 128.0 0.0");
     settings->SetSetting("rest_density",1000.0);
-    settings->SetSetting("max_num_particles",65536);
+    settings->SetSetting("max_num_particles",4096);
+    //settings->SetSetting("max_num_particles",65536);
     //settings->SetSetting("max_num_particles",262144);
-    settings->SetSetting("gravity_alphas",0.00 0.00);
+    settings->SetSetting("gravity_alphas","0.00 0.00");
     settings->SetSetting("gravity_mass","1.0 1.5");
     settings->SetSetting("gravity_sources","2.5 2.5 2.5 1.0 7.5 7.5 7.5 1.0");
     settings->SetSetting("gravity","0.0 0.0 -9.8 0.0");
@@ -1733,10 +1773,11 @@ int main(int argc, char* argv[])
     settings->SetSetting("boundary_dampening",256.0);
     settings->SetSetting("integrator","leapfrog");
     settings->SetSetting("time_step",0.003);
-    settings->SetSetting("use_color_field",1);
+    settings->SetSetting("use_color_field",0);
     settings->SetSetting("color_field_res",32);
+    settings->SetSetting("rtps_path",filepath);
 
-    sph = rtps::RTPS(settings,rtpsCL);
+    sph = rtps::RTPS::generateSystemInstance(settings,rtpsCL);
     rtps::RenderSettings rs;
     //rs.blending=false;
     rs.blending=false;
@@ -1752,7 +1793,7 @@ int main(int argc, char* argv[])
     rs.windowHeight=m_glutScreenWidth;
     lib = new rtps::ShaderLibrary();
     //string shaderpath=path+"/shaders";
-    lib->initializeShaders();
+    lib->initializeShaders(filepath+"shaders");
     sphereRenderer=new rtps::ParticleEffect(rs,*lib);
     //effects["sprite"]=new ParticleEffect();
     rs.blending=true;

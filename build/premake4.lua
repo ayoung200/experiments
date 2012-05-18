@@ -4,7 +4,7 @@ solution "0MySolution"
 	if _ACTION == "vs2010" or _ACTION=="vs2008" then
 		buildoptions { "/MP"  }
 	elseif _ACTION == "gmake" then
-		buildoptions {"-fpermissive -std=c++0x"}
+		buildoptions {"-fexceptions -fpermissive -std=c++0x"}
 	end 
 	
 	newoption {
@@ -37,8 +37,8 @@ solution "0MySolution"
 	configuration{}
 
 if not _OPTIONS["with-nacl"] then
-		flags { "NoRTTI", "NoExceptions"}
-		defines { "_HAS_EXCEPTIONS=0" }
+	--	flags { "NoRTTI", "NoExceptions"}
+	--	defines { "_HAS_EXCEPTIONS=0" }
 		targetdir "../bin"
 	  location("./" .. _ACTION)
 
