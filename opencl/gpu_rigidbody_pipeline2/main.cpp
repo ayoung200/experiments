@@ -16,7 +16,7 @@ subject to the following restrictions:
 //
 //#include "vld.h"
 #include <GL/glew.h>
-#include "btBulletDynamicsCommon.h"
+
 #include "GLInstancingRenderer.h"
 
 
@@ -25,18 +25,22 @@ subject to the following restrictions:
 #include "Win32OpenGLRenderManager.h"
 #include "CLPhysicsDemo.h"
 #include "../broadphase_benchmark/btGridBroadphaseCL.h"
-#include "../opencl/gpu_rigidbody_pipeline/btGpuNarrowPhaseAndSolver.h"
+#include "../../opencl/gpu_rigidbody_pipeline/btGpuNarrowPhaseAndSolver.h"
 #include "ShapeData.h"
+#include "LinearMath/btQuickprof.h"
+#include "LinearMath/btQuaternion.h"
 
-int NUM_OBJECTS_X = 32;
-int NUM_OBJECTS_Y = 24;
-int NUM_OBJECTS_Z = 32;
+int NUM_OBJECTS_X = 35;
+int NUM_OBJECTS_Y = 35;
+int NUM_OBJECTS_Z = 35;
 
-float X_GAP = 2.f;
+
+float X_GAP = 2.3f;
 float Y_GAP = 2.f;
-float Z_GAP = 2.f;
+float Z_GAP = 2.3f;
 
 extern int numPairsOut;
+extern int numPairsTotal;
 
 
 void createScene(GLInstancingRenderer& renderer,CLPhysicsDemo& physicsSim)
@@ -47,7 +51,13 @@ void createScene(GLInstancingRenderer& renderer,CLPhysicsDemo& physicsSim)
 	int cubeShapeIndex = -1;
 
 	float position[4]={0,0,0,0};
+	btQuaternion born(btVector3(1,0,0),SIMD_PI*0.25*0.5);
+
 	float orn[4] = {0,0,0,1};
+//	float rotOrn[4] = {born.getX(),born.getY(),born.getZ(),born.getW()};//
+	float rotOrn[4] ={0,0,0,1};
+	
+
 	float color[4] = {1,1,1,1};
 	int index=0;
 #if 0
@@ -58,7 +68,7 @@ void createScene(GLInstancingRenderer& renderer,CLPhysicsDemo& physicsSim)
 	}
 
 
-	float barrelScaling[4] = {2,2,2,2};
+	float barrelScaling[4] = {2,2,2,1};
 
 
 	int barrelCollisionShapeIndex = physicsSim.registerCollisionShape(&barrel_vertices[0],strideInBytes, sizeof(barrel_vertices)/strideInBytes,&barrelScaling[0]);
@@ -67,20 +77,20 @@ void createScene(GLInstancingRenderer& renderer,CLPhysicsDemo& physicsSim)
 
 	for (int i=0;i<NUM_OBJECTS_X;i++)
 	{
-		for (int j=NUM_OBJECTS_Y/2;j<(NUM_OBJECTS_Y/2+NUM_OBJECTS_Y/4);j++)
+		for (int j=0;j<(NUM_OBJECTS_Y/2);j++)
 		{
 			for (int k=0;k<NUM_OBJECTS_Z;k++)
 			{
 				float mass = j? 1.f : 0.f;
 
-				position[0]=(i*X_GAP-NUM_OBJECTS_X/2)+(j&1);
-				position[1]=(j*Y_GAP-NUM_OBJECTS_Y/2);
-				position[2]=(k*Z_GAP-NUM_OBJECTS_Z/2)+(j&1);
+				position[0]=(i*X_GAP-NUM_OBJECTS_X/2)+5;
+				position[1]=(j*Y_GAP*2-NUM_OBJECTS_Y/2);
+				position[2]=(k*Z_GAP-NUM_OBJECTS_Z/2)-NUM_OBJECTS_Z*3;
 				position[3] = 1.f;
 				
-				renderer.registerGraphicsInstance(barrelShapeIndex,position,orn,color,barrelScaling);
+				renderer.registerGraphicsInstance(barrelShapeIndex,position,rotOrn,color,barrelScaling);
 				void* ptr = (void*) index;
-				physicsSim.registerPhysicsInstance(mass,  position, orn, barrelCollisionShapeIndex,ptr);
+				physicsSim.registerPhysicsInstance(mass,  position, rotOrn, barrelCollisionShapeIndex,ptr);
 				
 				index++;
 			}
@@ -100,10 +110,18 @@ void createScene(GLInstancingRenderer& renderer,CLPhysicsDemo& physicsSim)
 
 	for (int i=0;i<NUM_OBJECTS_X;i++)
 	{
-		for (int j=0;j<NUM_OBJECTS_Y/2;j++)
+		for (int j=0;j<NUM_OBJECTS_Y;j++)
 		{
-			for (int k=0;k<NUM_OBJECTS_Z;k++)
+			int k=0;
+			if (j==NUM_OBJECTS_Y-1)
 			{
+				k=1;
+				if (i==0)
+					continue;
+			}
+			for (;k<NUM_OBJECTS_Z;k++)
+			{
+
 				float mass = 1.f;//j? 1.f : 0.f;
 
 				position[0]=(i*X_GAP-NUM_OBJECTS_X/2)+(j&1);
@@ -111,9 +129,10 @@ void createScene(GLInstancingRenderer& renderer,CLPhysicsDemo& physicsSim)
 				position[2]=(k*Z_GAP-NUM_OBJECTS_Z/2)+(j&1);
 				position[3] = 1.f;
 				
-				renderer.registerGraphicsInstance(cubeShapeIndex,position,orn,color,cubeScaling);
-				void* ptr = (void*) index;
-				physicsSim.registerPhysicsInstance(mass,  position, orn, cubeCollisionShapeIndex,ptr);
+				renderer.registerGraphicsInstance(cubeShapeIndex,position,rotOrn,color,cubeScaling);
+				int index1 = index;
+				void* ptr = (void*) index1;
+				physicsSim.registerPhysicsInstance(mass,  position, rotOrn, cubeCollisionShapeIndex,ptr);
 				
 				index++;
 			}
@@ -165,15 +184,15 @@ int main(int argc, char* argv[])
 	bool useInterop = true;
 	demo.init(-1,-1,useInterop);
 
-	render.InitShaders();
+		render.InitShaders();
 
-	if (useInterop)
+		if (useInterop)
 		demo.setupInterop();
 
 	createScene(render, demo);
 		
 
-	printf("num objects = %d\n", NUM_OBJECTS_X*NUM_OBJECTS_Y*NUM_OBJECTS_Z);
+	printf("numPhysicsInstances= %d\n", demo.m_numPhysicsInstances);
 
 
 	render.writeTransforms();
@@ -194,18 +213,25 @@ int main(int argc, char* argv[])
 
 		static bool printStats  = true;
 
+		
+		
 		 if (printStats)
 		 {
-			static int count = 10;
+			static int count = 0;
 			count--;
 			if (count<0)
 			{
+				count = 100;
 				CProfileManager::dumpAll();
-				//printf("total broadphase pairs= %d\n", gFpIO.m_numOverlap);
+				printf("total broadphase pairs= %d\n", numPairsTotal);
 				printf("numPairsOut (culled)  = %d\n", numPairsOut);
-				printStats  = false;
+				//printStats  = false;
+			} else
+			{
+				printf(".");
 			}
 		 }
+		
 
 	}
 

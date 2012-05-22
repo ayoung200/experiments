@@ -56,12 +56,13 @@ int m_glutScreenHeight = 768;
 extern int gShapeIndex;
 
 
-btVector3 m_cameraPosition(80,30,142);
-btVector3 m_cameraTargetPosition(20,-5,0);
-btScalar m_cameraDistance = 55;
+btVector3 m_cameraPosition(0,0,0);//will be overridden by a position computed from azi/ele
+btVector3 m_cameraTargetPosition(15,-5,-10);
+btScalar m_cameraDistance = 125;
 btVector3 m_cameraUp(0,1,0);
-float m_azi=55.f;
-float m_ele=5.f;
+float m_azi=135.f;
+float m_ele=15.f;
+
 
 
 

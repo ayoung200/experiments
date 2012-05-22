@@ -27,7 +27,14 @@ subject to the following restrictions:
 #include "../opencl/gpu_rigidbody_pipeline/btGpuNarrowPhaseAndSolver.h"
 #include "../opencl/gpu_rigidbody_pipeline/btConvexUtility.h"
 #include "../../dynamics/basic_demo/ConvexHeightFieldShape.h"
+//#define USE_GRID_BROADPHASE
+#ifdef USE_GRID_BROADPHASE
 #include "../broadphase_benchmark/btGridBroadphaseCL.h"
+#else
+#include "btGpuSapBroadphase.h"
+#endif //USE_GRID_BROADPHASE
+
+#include "../broadphase_benchmark/btAabbHost.h"
 #include "LinearMath/btQuickprof.h"
 
 
@@ -63,31 +70,23 @@ cl_context			g_cxMainContext;
 cl_command_queue	g_cqCommandQue;
 cl_device_id		g_device;
 
-cl_mem				gLinVelMem=0;
-cl_mem				gAngVelMem=0;
-cl_mem				gBodyTimes=0;
 
-#include <Adl/Adl.h>
 
-adl::DeviceCL* g_deviceCL=0;
 
-struct  btAABBHost //keep this in sync with btAABBCL!
-{
-	float			fx;
-	float			fy;
-	float			fz;
-	unsigned int	uw;
-};
 
 struct InternalData
 {
-	adl::Buffer<btVector3>* m_linVelBuf;
-	adl::Buffer<btVector3>* m_angVelBuf;
-	adl::Buffer<float>* m_bodyTimes;
+	btOpenCLArray<btVector3>* m_linVelBuf;
+	btOpenCLArray<btVector3>* m_angVelBuf;
+	btOpenCLArray<float>* m_bodyTimes;
 	bool	m_useInterop;
+#ifdef USE_GRID_BROADPHASE
 	btGridBroadphaseCl* m_Broadphase;
+#else
+	btGpuSapBroadphase* m_Broadphase;
+#endif //USE_GRID_BROADPHASE
 
-	adl::Buffer<btAABBHost>* m_localShapeAABB;
+	btOpenCLArray<btAABBHost>* m_localShapeAABB;
 
 	btVector3*	m_linVelHost;
 	btVector3*	m_angVelHost;
@@ -196,18 +195,18 @@ int		CLPhysicsDemo::registerCollisionShape(const float* vertices, int strideInBy
 		verts.push_back(btVector3(vertex[0]*scaling[0],vertex[1]*scaling[1],vertex[2]*scaling[2]));
 	}
 
-	btConvexUtility util;
+	btConvexUtility* utilPtr = new btConvexUtility();
 	bool merge = true;
-	util.initializePolyhedralFeatures(verts,merge);
+	utilPtr->initializePolyhedralFeatures(verts,merge);
 
-	int numFaces= util.m_faces.size();
+	int numFaces= utilPtr->m_faces.size();
 	float4* eqn = new float4[numFaces];
 	for (int i=0;i<numFaces;i++)
 	{
-		eqn[i].x = util.m_faces[i].m_plane[0];
-		eqn[i].y = util.m_faces[i].m_plane[1];
-		eqn[i].z = util.m_faces[i].m_plane[2];
-		eqn[i].w = util.m_faces[i].m_plane[3];
+		eqn[i].x = utilPtr->m_faces[i].m_plane[0];
+		eqn[i].y = utilPtr->m_faces[i].m_plane[1];
+		eqn[i].z = utilPtr->m_faces[i].m_plane[2];
+		eqn[i].w = utilPtr->m_faces[i].m_plane[3];
 	}
 	printf("numFaces = %d\n", numFaces);
 
@@ -217,7 +216,7 @@ int		CLPhysicsDemo::registerCollisionShape(const float* vertices, int strideInBy
 	int shapeIndex=-1;
 
 	if (narrowphaseAndSolver)
-		shapeIndex = narrowphaseAndSolver->registerShape(s_convexHeightField);
+		shapeIndex = narrowphaseAndSolver->registerShape(s_convexHeightField,utilPtr);
 
 	if (shapeIndex>=0)
 	{
@@ -232,9 +231,9 @@ int		CLPhysicsDemo::registerCollisionShape(const float* vertices, int strideInBy
 		aabbMax.fz= s_convexHeightField->m_aabb.m_max.z;
 		aabbMax.uw = shapeIndex;
 
-		m_data->m_localShapeAABB->write(&aabbMin,1,shapeIndex*2);
-		m_data->m_localShapeAABB->write(&aabbMax,1,shapeIndex*2+1);
-		adl::DeviceUtils::waitForCompletion( g_deviceCL );
+		m_data->m_localShapeAABB->copyFromHostPointer(&aabbMin,1,shapeIndex*2);
+		m_data->m_localShapeAABB->copyFromHostPointer(&aabbMax,1,shapeIndex*2+1);
+		clFinish(g_cqCommandQue);
 	}
 
 	m_numCollisionShapes++;
@@ -246,12 +245,13 @@ int		CLPhysicsDemo::registerPhysicsInstance(float mass, const float* position, c
 {
 	btVector3 aabbMin(position[0],position[0],position[0]);
 	btVector3 aabbMax = aabbMin;
-	aabbMin -= btVector3(1.f,1.f,1.f);
-	aabbMax += btVector3(1.f,1.f,1.f);
+	aabbMin -= btVector3(1.f,1.f,1.f)*0.1f;
+	aabbMax += btVector3(1.f,1.f,1.f)*0.1f;
 
 	if (collisionShapeIndex>=0)
 	{
-		btBroadphaseProxy* proxy = m_data->m_Broadphase->createProxy(aabbMin,aabbMax,collisionShapeIndex,userPointer,1,1,0,0);//m_dispatcher);
+		//btBroadphaseProxy* proxy = m_data->m_Broadphase->createProxy(aabbMin,aabbMax,collisionShapeIndex,userPointer,1,1,0,0);//m_dispatcher);
+		m_data->m_Broadphase->createProxy(aabbMin,aabbMax,collisionShapeIndex,userPointer,1,1);//m_dispatcher);
 	}
 			
 	bool writeToGpu = false;
@@ -271,45 +271,35 @@ void	CLPhysicsDemo::init(int preferredDevice, int preferredPlatform, bool useInt
 	
 	InitCL(-1,-1,useInterop);
 
-#define CUSTOM_CL_INITIALIZATION
-#ifdef CUSTOM_CL_INITIALIZATION
-	g_deviceCL = new adl::DeviceCL();
-	g_deviceCL->m_deviceIdx = g_device;
-	g_deviceCL->m_context = g_cxMainContext;
-	g_deviceCL->m_commandQueue = g_cqCommandQue;
-	g_deviceCL->m_kernelManager = new adl::KernelManager;
-
-#else
-	DeviceUtils::Config cfg;
-	cfg.m_type = DeviceUtils::Config::DEVICE_CPU;
-	g_deviceCL = DeviceUtils::allocate( TYPE_CL, cfg );
-#endif
 
 	//adl::Solver<adl::TYPE_CL>::allocate(g_deviceCL->allocate(
-	m_data->m_linVelBuf = new adl::Buffer<btVector3>(g_deviceCL,MAX_CONVEX_BODIES_CL);
-	m_data->m_angVelBuf = new adl::Buffer<btVector3>(g_deviceCL,MAX_CONVEX_BODIES_CL);
-	m_data->m_bodyTimes = new adl::Buffer<float>(g_deviceCL,MAX_CONVEX_BODIES_CL);
+	m_data->m_linVelBuf = new btOpenCLArray<btVector3>(g_cxMainContext,g_cqCommandQue,MAX_CONVEX_BODIES_CL,false);
+	m_data->m_angVelBuf = new btOpenCLArray<btVector3>(g_cxMainContext,g_cqCommandQue,MAX_CONVEX_BODIES_CL,false);
+	m_data->m_bodyTimes = new btOpenCLArray<float>(g_cxMainContext,g_cqCommandQue,MAX_CONVEX_BODIES_CL,false);
 	
-	m_data->m_localShapeAABB = new adl::Buffer<btAABBHost>(g_deviceCL,MAX_CONVEX_SHAPES_CL);
+	m_data->m_localShapeAABB = new btOpenCLArray<btAABBHost>(g_cxMainContext,g_cqCommandQue,MAX_CONVEX_SHAPES_CL,false);
 	
-	gLinVelMem = (cl_mem)m_data->m_linVelBuf->m_ptr;
-	gAngVelMem = (cl_mem)m_data->m_angVelBuf->m_ptr;
-	gBodyTimes = (cl_mem)m_data->m_bodyTimes->m_ptr;
 
 	writeVelocitiesToGpu();
 
 
-	narrowphaseAndSolver = new btGpuNarrowphaseAndSolver(g_deviceCL);
+	narrowphaseAndSolver = new btGpuNarrowphaseAndSolver(g_cxMainContext,g_device,g_cqCommandQue);
 
 	
 	
 	int maxObjects = btMax(256,MAX_CONVEX_BODIES_CL);
 	int maxPairsSmallProxy = 32;
+	
+
+#ifdef USE_GRID_BROADPHASE
 	btOverlappingPairCache* overlappingPairCache=0;
-
 	m_data->m_Broadphase = new btGridBroadphaseCl(overlappingPairCache,btVector3(4.f, 4.f, 4.f), 128, 128, 128,maxObjects, maxObjects, maxPairsSmallProxy, 100.f, 128,
-		g_cxMainContext ,g_device,g_cqCommandQue, g_deviceCL);
-
+		g_cxMainContext ,g_device,g_cqCommandQue);
+#else //USE_GRID_BROADPHASE
+	m_data->m_Broadphase = new btGpuSapBroadphase(g_cxMainContext ,g_device,g_cqCommandQue);//overlappingPairCache,btVector3(4.f, 4.f, 4.f), 128, 128, 128,maxObjects, maxObjects, maxPairsSmallProxy, 100.f, 128,
+		//g_cxMainContext ,g_device,g_cqCommandQue);
+	
+#endif//USE_GRID_BROADPHASE
 	
 
 	cl_program prog = btOpenCLUtils::compileCLProgramFromString(g_cxMainContext,g_device,interopKernelString,0,"",INTEROPKERNEL_SRC_PATH);
@@ -327,10 +317,10 @@ void	CLPhysicsDemo::init(int preferredDevice, int preferredPlatform, bool useInt
 
 void CLPhysicsDemo::writeVelocitiesToGpu()
 {
-	m_data->m_linVelBuf->write(m_data->m_linVelHost,MAX_CONVEX_BODIES_CL);
-	m_data->m_angVelBuf->write(m_data->m_angVelHost,MAX_CONVEX_BODIES_CL);
-	m_data->m_bodyTimes->write(m_data->m_bodyTimesHost,MAX_CONVEX_BODIES_CL);
-	adl::DeviceUtils::waitForCompletion( g_deviceCL );
+	m_data->m_linVelBuf->copyFromHostPointer(m_data->m_linVelHost,MAX_CONVEX_BODIES_CL);
+	m_data->m_angVelBuf->copyFromHostPointer(m_data->m_angVelHost,MAX_CONVEX_BODIES_CL);
+	m_data->m_bodyTimes->copyFromHostPointer(m_data->m_bodyTimesHost,MAX_CONVEX_BODIES_CL);
+	clFinish(g_cqCommandQue);
 }
 
 
@@ -352,13 +342,9 @@ void	CLPhysicsDemo::cleanup()
 	delete m_data->m_localShapeAABB;
 
 	delete m_data->m_Broadphase;
-	delete m_data;
 
-	delete g_deviceCL->m_kernelManager;
-	delete g_deviceCL;
 
 	m_data=0;
-	g_deviceCL=0;
 	delete g_interopBuffer;
 	delete s_convexHeightField;
 }
@@ -383,7 +369,7 @@ void	CLPhysicsDemo::stepSimulation()
 		clBuffer = g_interopBuffer->getCLBUffer();
 		BT_PROFILE("clEnqueueAcquireGLObjects");
 		ciErrNum = clEnqueueAcquireGLObjects(g_cqCommandQue, 1, &clBuffer, 0, 0, NULL);
-		adl::DeviceUtils::waitForCompletion( g_deviceCL );
+		clFinish(g_cqCommandQue);
 	} else
 	{
 
@@ -398,7 +384,7 @@ void	CLPhysicsDemo::stepSimulation()
 		{
 			clBuffer = clCreateBuffer(g_cxMainContext, CL_MEM_READ_WRITE, VBOsize, 0, &ciErrNum);
 		} 
-		adl::DeviceUtils::waitForCompletion( g_deviceCL );
+		clFinish(g_cqCommandQue);
 			oclCHECKERROR(ciErrNum, CL_SUCCESS);
 
 		ciErrNum = clEnqueueWriteBuffer (	g_cqCommandQue,
@@ -408,7 +394,7 @@ void	CLPhysicsDemo::stepSimulation()
  			VBOsize,
  			hostPtr,0,0,0
 		);
-		adl::DeviceUtils::waitForCompletion( g_deviceCL );
+		clFinish(g_cqCommandQue);
 	}
 
 
@@ -420,8 +406,8 @@ void	CLPhysicsDemo::stepSimulation()
 		gFpIO.m_numObjects = m_numPhysicsInstances;
 		gFpIO.m_positionOffset = SHAPE_VERTEX_BUFFER_SIZE/4;
 		gFpIO.m_clObjectsBuffer = clBuffer;
-		gFpIO.m_dAABB = m_data->m_Broadphase->m_dAABB;
-		gFpIO.m_dlocalShapeAABB = (cl_mem)m_data->m_localShapeAABB->m_ptr;
+		gFpIO.m_dAABB = m_data->m_Broadphase->getAabbBuffer();
+		gFpIO.m_dlocalShapeAABB = (cl_mem)m_data->m_localShapeAABB->getBufferCL();
 		gFpIO.m_numOverlap = 0;
 		{
 			BT_PROFILE("setupGpuAabbs");
@@ -430,9 +416,9 @@ void	CLPhysicsDemo::stepSimulation()
 		if (1)
 		{
 			BT_PROFILE("calculateOverlappingPairs");
-			m_data->m_Broadphase->calculateOverlappingPairs(0, m_numPhysicsInstances);
-			gFpIO.m_dAllOverlappingPairs = m_data->m_Broadphase->m_dAllOverlappingPairs;
-			gFpIO.m_numOverlap = m_data->m_Broadphase->m_numPrefixSum;
+			m_data->m_Broadphase->calculateOverlappingPairs();
+			gFpIO.m_dAllOverlappingPairs = m_data->m_Broadphase->getOverlappingPairBuffer();
+			gFpIO.m_numOverlap = m_data->m_Broadphase->getNumOverlap();
 		}
 		
 		//printf("gFpIO.m_numOverlap = %d\n",gFpIO.m_numOverlap );
@@ -445,9 +431,9 @@ void	CLPhysicsDemo::stepSimulation()
 				{
 					//BT_PROFILE("setupBodies");
 					if (narrowphaseAndSolver)
-						setupBodies(gFpIO, gLinVelMem, gAngVelMem, narrowphaseAndSolver->getBodiesGpu(), narrowphaseAndSolver->getBodyInertiasGpu());
+						setupBodies(gFpIO, m_data->m_linVelBuf->getBufferCL(), m_data->m_angVelBuf->getBufferCL(), narrowphaseAndSolver->getBodiesGpu(), narrowphaseAndSolver->getBodyInertiasGpu());
 				}
-				if (gFpIO.m_numOverlap)
+				
 				{
 					BT_PROFILE("computeContactsAndSolver");
 					if (narrowphaseAndSolver)
@@ -457,7 +443,7 @@ void	CLPhysicsDemo::stepSimulation()
 				{
 					BT_PROFILE("copyBodyVelocities");
 					if (narrowphaseAndSolver)
-						copyBodyVelocities(gFpIO, gLinVelMem, gAngVelMem, narrowphaseAndSolver->getBodiesGpu(), narrowphaseAndSolver->getBodyInertiasGpu());
+						copyBodyVelocities(gFpIO, m_data->m_linVelBuf->getBufferCL(), m_data->m_angVelBuf->getBufferCL(), narrowphaseAndSolver->getBodiesGpu(), narrowphaseAndSolver->getBodyInertiasGpu());
 				}
 			}
 
@@ -480,9 +466,13 @@ void	CLPhysicsDemo::stepSimulation()
 				ciErrNum = clSetKernelArg(g_integrateTransformsKernel, 1, sizeof(int), &numObjects);
 				ciErrNum = clSetKernelArg(g_integrateTransformsKernel, 2, sizeof(cl_mem), (void*)&clBuffer );
 
-				ciErrNum = clSetKernelArg(g_integrateTransformsKernel, 3, sizeof(cl_mem), (void*)&gLinVelMem);
-				ciErrNum = clSetKernelArg(g_integrateTransformsKernel, 4, sizeof(cl_mem), (void*)&gAngVelMem);
-				ciErrNum = clSetKernelArg(g_integrateTransformsKernel, 5, sizeof(cl_mem), (void*)&gBodyTimes);
+				cl_mem lv = m_data->m_linVelBuf->getBufferCL();
+				cl_mem av = m_data->m_angVelBuf->getBufferCL();
+				cl_mem btimes = m_data->m_bodyTimes->getBufferCL();
+
+				ciErrNum = clSetKernelArg(g_integrateTransformsKernel, 3, sizeof(cl_mem), (void*)&lv);
+				ciErrNum = clSetKernelArg(g_integrateTransformsKernel, 4, sizeof(cl_mem), (void*)&av);
+				ciErrNum = clSetKernelArg(g_integrateTransformsKernel, 5, sizeof(cl_mem), (void*)&btimes);
 					
 					
 					
@@ -505,7 +495,7 @@ void	CLPhysicsDemo::stepSimulation()
 	{
 		BT_PROFILE("clEnqueueReleaseGLObjects");
 		ciErrNum = clEnqueueReleaseGLObjects(g_cqCommandQue, 1, &clBuffer, 0, 0, 0);
-		adl::DeviceUtils::waitForCompletion( g_deviceCL );
+		clFinish(g_cqCommandQue);
 	}
 	else
 	{
@@ -518,7 +508,7 @@ void	CLPhysicsDemo::stepSimulation()
  		hostPtr,0,0,0);
 
 		//clReleaseMemObject(clBuffer);
-		adl::DeviceUtils::waitForCompletion( g_deviceCL );
+		clFinish(g_cqCommandQue);
 		glUnmapBuffer( GL_ARRAY_BUFFER);
 		glFlush();
 	}

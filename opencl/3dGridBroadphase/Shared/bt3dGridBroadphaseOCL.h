@@ -95,13 +95,22 @@ protected:
 	cl_mem					m_dPairsContiguous;
 	cl_mem					m_dBpParams;
 
-	adl::Device*			m_deviceHost;
-	adl::DeviceCL*			m_deviceCL;
-	bool					m_ownsDevice;
 
+	unsigned int			m_numPrefixSum;
 
 public:
-	unsigned int			m_numPrefixSum;
+
+	cl_mem	getAabbBuffer()
+		{
+			return m_dAABB;
+		}
+	virtual int	getNumOverlap() const
+	{
+		return m_numPrefixSum;
+	}
+	
+
+	
 
 	bt3dGridBroadphaseOCL(	btOverlappingPairCache* overlappingPairCache,
 							const btVector3& cellSize, 

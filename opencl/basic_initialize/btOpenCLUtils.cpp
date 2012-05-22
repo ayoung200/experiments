@@ -58,8 +58,12 @@ static const char* spPlatformVendor =
 
 int btOpenCLUtils_getNumPlatforms(cl_int* pErrNum)
 {
-	cl_uint numPlatforms=0;
-	cl_int ciErrNum = clGetPlatformIDs(0, NULL, &numPlatforms);
+
+	cl_platform_id pPlatforms[10] = { 0 };
+    	
+    cl_uint numPlatforms = 0;
+    cl_int ciErrNum = clGetPlatformIDs(10, pPlatforms, &numPlatforms);
+	//cl_int ciErrNum = clGetPlatformIDs(0, NULL, &numPlatforms);
 
 	if(ciErrNum != CL_SUCCESS)
 	{
@@ -67,6 +71,7 @@ int btOpenCLUtils_getNumPlatforms(cl_int* pErrNum)
 			*pErrNum = ciErrNum;
 	}
 	return numPlatforms;
+
 }
 
 const char* btOpenCLUtils_getSdkVendorName()
@@ -195,7 +200,11 @@ cl_context btOpenCLUtils_createContextFromPlatform(cl_platform_id platform, cl_d
 		} else
 		{
 			//create a context of all devices
+#if defined (__APPLE__) && defined (_DEBUG)
+			retContext = clCreateContext(cprops,num_devices,devices,clLogMessagesToStderrAPPLE,NULL,&ciErrNum);
+#else
 			retContext = clCreateContext(cprops,num_devices,devices,NULL,NULL,&ciErrNum);
+#endif
 		}
 	}
 	if(pErrNum != NULL) 
@@ -486,8 +495,9 @@ static const char* strip2(const char* name, const char* pattern)
 	  return oriptr;
 }
 
-cl_program btOpenCLUtils_compileCLProgramFromString(cl_context clContext, cl_device_id device, const char* kernelSource, cl_int* pErrNum, const char* additionalMacros , const char* clFileNameForCaching)
+cl_program btOpenCLUtils_compileCLProgramFromString(cl_context clContext, cl_device_id device, const char* kernelSourceOrg, cl_int* pErrNum, const char* additionalMacrosArg , const char* clFileNameForCaching)
 {
+	const char* additionalMacros = additionalMacrosArg?additionalMacrosArg:"";
 
 	cl_program m_cpProgram=0;
 	cl_int status;
@@ -583,7 +593,32 @@ cl_program btOpenCLUtils_compileCLProgramFromString(cl_context clContext, cl_dev
 		cl_int localErrNum;
 		char* compileFlags;
 		int flagsize;
-		size_t program_length = strlen(kernelSource);
+		
+		
+
+		const char* kernelSource = kernelSourceOrg;
+
+		if (!kernelSourceOrg)
+		{
+			if (clFileNameForCaching)
+			{
+				FILE* file = fopen(clFileNameForCaching, "rb");
+				if (file)
+				{
+					char* kernelSrc=0;
+					fseek( file, 0L, SEEK_END );
+					int kernelSize = ftell( file );
+					rewind( file );
+					kernelSrc = (char*)malloc(kernelSize+1);
+					int readBytes = fread((void*)kernelSrc,1,kernelSize, file);
+					kernelSrc[kernelSize] = 0;
+					fclose(file);
+					kernelSource = kernelSrc;
+				}
+			}
+		}
+
+		size_t program_length = kernelSource ? strlen(kernelSource) : 0;
 #ifdef MAC //or __APPLE__?
 		char* flags = "-cl-mad-enable -DMAC -DGUID_ARG";
 #else
@@ -689,7 +724,7 @@ cl_kernel btOpenCLUtils_compileCLKernelFromString(cl_context clContext, cl_devic
 	
 	cl_kernel kernel;
 	cl_int localErrNum;
-	size_t program_length = strlen(kernelSource);
+	
 	cl_program m_cpProgram = prog;
 
 	printf("compiling kernel %s ",kernelName);

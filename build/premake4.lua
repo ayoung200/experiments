@@ -21,19 +21,22 @@ solution "0MySolution"
 	configuration "Release"
 		flags { "Optimize", "StaticRuntime", "NoMinimalRebuild", "FloatFast"}
 	configuration "Debug"
+		defines {"_DEBUG=1"}
 		flags { "Symbols", "StaticRuntime" , "NoMinimalRebuild", "NoEditAndContinue" ,"FloatFast"}
 		
 	platforms {"x32", "x64"}
 
+	configuration {"x32"}
+		targetsuffix ("_" .. _ACTION)
 	configuration "x64"		
-		targetsuffix "_64"
+		targetsuffix ("_" .. _ACTION .. "_64" )
 	configuration {"x64", "debug"}
-		targetsuffix "_x64_debug"
+		targetsuffix ("_" .. _ACTION .. "_x64_debug")
 	configuration {"x64", "release"}
-		targetsuffix "_x64"
+		targetsuffix ("_" .. _ACTION .. "_x64_release" )
 	configuration {"x32", "debug"}
-		targetsuffix "_debug"
-
+		targetsuffix ("_" .. _ACTION .. "_debug" )
+	
 	configuration{}
 
 if not _OPTIONS["with-nacl"] then
@@ -79,11 +82,12 @@ if not _OPTIONS["with-nacl"] then
 	include "../opencl/basic_initialize"
 	include "../opencl/vector_add"
 	include "../opencl/gui_initialize"
-	include "../opencl/opengl_interop"
+--	include "../opencl/opengl_interop"
 	include "../opencl/global_atomics"
-	include "../opencl/integration"
-	include "../opencl/primitives/AdlTest"
-	include "../opencl/primitives/benchmark"
+--	include "../opencl/integration"
+
+	include "../opencl/benchmark/sort"
+--	include "../opencl/primitives/benchmark"
 	include "../rendering/GLSL_Instancing"
 	include "../opencl/3dGridBroadphase"
 	include "../opencl/broadphase_benchmark"
@@ -113,9 +117,11 @@ end
 	
 	include "../dynamics/testbed"
 	include "../dynamics/position_based_dynamics"
-	include "../dynamics/basic_demo"
+--	include "../dynamics/basic_demo"
 	
-	include "../dynamics/corotational_fem"
+
+	include "../dynamics/exact-ccd"
+--	include "../dynamics/corotational_fem"
 	--include "../dynamics/nncg_test"
 
 	include "../rendering/Gwen/Gwen"

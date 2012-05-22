@@ -1,11 +1,11 @@
 
 /*
-Copyright (c) 2012 Advanced Micro Devices, Inc.  
+Copyright (c) 2012 Advanced Micro Devices, Inc.
 
 This software is provided 'as-is', without any express or implied warranty.
 In no event will the authors be held liable for any damages arising from the use of this software.
-Permission is granted to anyone to use this software for any purpose, 
-including commercial applications, and to alter it and redistribute it freely, 
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it freely,
 subject to the following restrictions:
 
 1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
@@ -14,30 +14,16 @@ subject to the following restrictions:
 */
 //Originally written by Erwin Coumans
 
-//starts crashing when more than 32700 objects on my Geforce 260, unless _USE_SUB_DATA is defined (still unstable though)
-//runs fine with fewer objects
 
 #define NUM_OBJECTS_X 42
-//327
 #define NUM_OBJECTS_Y 42
 #define NUM_OBJECTS_Z 42
-//#define NUM_OBJECTS_Z 20
 
-//#define _USE_SUB_DATA
-
-//#define NUM_OBJECTS_X 100
-//#define NUM_OBJECTS_Y 100
-//#define NUM_OBJECTS_Z 100
-
-///RECREATE_CL_AND_SHADERS_ON_RESIZE will delete and re-create OpenCL and GLSL shaders/buffers at each resize
-//#define RECREATE_CL_AND_SHADERS_ON_RESIZE
+#define MAX_PAIRS_PER_SMALL_BODY 64
 
 ///
-/// OpenCL - OpenGL interop example. Updating transforms of many cubes on GPU, without going through main memory/using the PCIe bus
-/// Create all OpenGL resources AFTER create OpenCL context!
-///
-
-
+#include "LinearMath/btAabbUtil2.h"
+#include "LinearMath/btQuickprof.h"
 #include <GL/glew.h>
 #include <stdio.h>
 
@@ -45,7 +31,29 @@ subject to the following restrictions:
 #include <Adl/Adl.h>
 #include "../../rendering/GlutGlewWindows/btGlutInclude.h"
 #include "../opengl_interop/btStopwatch.h"
+#include "btRadixSort32CL.h"
 
+
+
+btRadixSort32CL* sorter=0;
+btVector3 minCoord(1e30,1e30,1e30);
+btVector3 maxCoord(1e30,1e30,1e30);
+//http://stereopsis.com/radix.html
+
+
+static inline unsigned int FloatFlip(float fl)
+{
+	unsigned int f = *(unsigned int*)&fl;
+	unsigned int mask = -(int)(f >> 31) | 0x80000000;
+	return f ^ mask;
+}
+
+static inline float IFloatFlip(unsigned int f)
+{
+	unsigned int mask = ((f >> 31) - 1) | 0x80000000;
+	unsigned int fl = f ^ mask;
+	return *(float*)&fl;
+}
 
 #include "btVector3.h"
 #include "btQuaternion.h"
@@ -63,7 +71,47 @@ static float angle(0);
 #include "../3dGridBroadphase/Shared/btGpu3DGridBroadphase.h"
 #include "../3dGridBroadphase/Shared/bt3dGridBroadphaseOCL.h"
 #include "btGridBroadphaseCL.h"
+#include "btFillCL.h"//for btInt2
 
+#include "btLauncherCL.h"
+
+struct btAabb2Host
+{
+	union
+	{
+		float m_min[4];
+		int m_minIndices[4];
+	};
+	union
+	{
+		float m_max[4];
+		int m_signedMaxIndices[4];
+		unsigned int m_unsignedMaxIndices[4];
+>>>>>>> 4ffca708ec4d02cbc19cbf740d007ddd82ae7f96
+
+	};
+};
+
+class aabbCompare
+{
+	public:
+
+		int m_axis;
+
+		bool operator() ( const btAabb2Host& a1, const btAabb2Host& b1 ) const
+		{
+			//float a1min = a1.m_min[m_axis];
+			//float b1min = b1.m_min[m_axis];
+
+			unsigned int a1min = a1.m_unsignedMaxIndices[3];
+			unsigned int b1min = b1.m_unsignedMaxIndices[3];
+			return a1min < b1min;
+		}
+};
+
+
+btAlignedObjectArray<btAabb2Host> sortedHostAabbs;
+btAlignedObjectArray<btSortData> hostData;
 #define USE_NEW
 #ifdef USE_NEW
 btGridBroadphaseCl* sBroadphase=0;
@@ -87,7 +135,7 @@ int randbiased (double x) {
     }
 }
 
-size_t randrange (size_t n) 
+size_t randrange (size_t n)
 {
     double xhi;
     double resolution = n * RS_SCALE;
@@ -130,11 +178,10 @@ float m_ele=0.f;
 
 btOpenCLGLInteropBuffer* g_interopBuffer = 0;
 cl_kernel g_sineWaveKernel;
-
-
-
-
-adl::DeviceCL* g_deviceCL=0;
+cl_program sapProg;
+cl_kernel g_sapKernel;
+cl_kernel g_flipFloatKernel;
+cl_kernel g_scatterKernel;
 
 
 
@@ -143,7 +190,7 @@ bool printStats = false;
 bool runOpenCLKernels = true;
 
 #define MSTRINGIFY(A) #A
-static char* interopKernelString = 
+static char* interopKernelString =
 #include "integrateKernel.cl"
 
 
@@ -347,14 +394,14 @@ bool gltLoadShaderFile(const char *szFile, GLuint shader)
 		fclose(fp);
 	}
 	else
-		return false;    
+		return false;
 
 	//	printf(shaderText);
 	// Load the string
 	gltLoadShaderSrc((const char *)shaderText, shader);
 
 	return true;
-}   
+}
 
 
 /////////////////////////////////////////////////////////////////
@@ -365,8 +412,8 @@ GLuint gltLoadShaderPair(const char *szVertexProg, const char *szFragmentProg, b
 {
 	// Temporary Shader objects
 	GLuint hVertexShader;
-	GLuint hFragmentShader; 
-	GLuint hReturn = 0;   
+	GLuint hFragmentShader;
+	GLuint hReturn = 0;
 	GLint testVal;
 
 	// Create shader objects
@@ -434,7 +481,7 @@ GLuint gltLoadShaderPair(const char *szVertexProg, const char *szFragmentProg, b
 
 	// These are no longer needed
 	glDeleteShader(hVertexShader);
-	glDeleteShader(hFragmentShader);  
+	glDeleteShader(hFragmentShader);
 
 	// Make sure link worked too
 	glGetProgramiv(hReturn, GL_LINK_STATUS, &testVal);
@@ -444,8 +491,8 @@ GLuint gltLoadShaderPair(const char *szVertexProg, const char *szFragmentProg, b
 		return (GLuint)NULL;
 	}
 
-	return hReturn;  
-}   
+	return hReturn;
+}
 
 ///position xyz, unused w, normal, uv
 static const GLfloat cube_vertices[] =
@@ -498,7 +545,7 @@ int m_mouseButtons = 0;
 
 void mouseFunc(int button, int state, int x, int y)
 {
-	if (state == 0) 
+	if (state == 0)
 	{
         m_mouseButtons |= 1<<button;
     } else
@@ -514,7 +561,7 @@ void mouseFunc(int button, int state, int x, int y)
 btVector3	getRayTo(int x,int y)
 {
 
-	
+
 
 	if (m_ortho)
 	{
@@ -523,14 +570,14 @@ btVector3	getRayTo(int x,int y)
 		btVector3 extents;
 		aspect = m_glutScreenWidth / (btScalar)m_glutScreenHeight;
 		extents.setValue(aspect * 1.0f, 1.0f,0);
-		
+
 		extents *= m_cameraDistance;
 		btVector3 lower = m_cameraTargetPosition - extents;
 		btVector3 upper = m_cameraTargetPosition + extents;
 
 		btScalar u = x / btScalar(m_glutScreenWidth);
 		btScalar v = (m_glutScreenHeight - y) / btScalar(m_glutScreenHeight);
-		
+
 		btVector3	p(0,0,0);
 		p.setValue((1.0f - u) * lower.getX() + u * upper.getX(),(1.0f - v) * lower.getY() + v * upper.getY(),m_cameraTargetPosition.getZ());
 		return p;
@@ -564,9 +611,9 @@ btVector3	getRayTo(int x,int y)
 	vertical *= 2.f * farPlane * tanfov;
 
 	btScalar aspect;
-	
+
 	aspect = m_glutScreenWidth / (btScalar)m_glutScreenHeight;
-	
+
 	hor*=aspect;
 
 
@@ -609,21 +656,21 @@ void mouseMotionFunc(int x, int y)
 		if(m_mouseButtons & (2 << 2) && m_mouseButtons & 1)
 		{
 		}
-		else if(m_mouseButtons & 1) 
+		else if(m_mouseButtons & 1)
 		{
 			m_azi += dx * btScalar(0.2);
 			m_azi = fmodf(m_azi, btScalar(360.f));
 			m_ele += dy * btScalar(0.2);
 			m_ele = fmodf(m_ele, btScalar(180.f));
-		} 
-		else if(m_mouseButtons & 4) 
+		}
+		else if(m_mouseButtons & 4)
 		{
 			m_cameraDistance -= dy * btScalar(0.02f);
 			if (m_cameraDistance<btScalar(0.1))
 				m_cameraDistance = btScalar(0.1);
 
-			
-		} 
+
+		}
 	}
 
 
@@ -654,11 +701,8 @@ void InitCL()
         glDC = glXGetCurrentDisplay();
 #endif //!_WIN32
 
-#ifdef CL_PLATFORM_INTEL
-	cl_device_type deviceType = CL_DEVICE_TYPE_ALL;
-#else
+	int ciErrNum = 0;
 	cl_device_type deviceType = CL_DEVICE_TYPE_GPU;
-#endif
 
 
 	g_cxMainContext = btOpenCLUtils::createContextFromType(deviceType, &ciErrNum, glCtx, glDC);
@@ -704,10 +748,10 @@ void DeleteShaders()
 
 void InitShaders()
 {
-	
+
 	btOverlappingPairCache* overlappingPairCache=0;
 #ifdef	USE_NEW
-	sBroadphase = new btGridBroadphaseCl(overlappingPairCache,btVector3(3.f, 3.f, 3.f), 32, 32, 32,NUM_OBJECTS, NUM_OBJECTS, 64, 100.f, 16,
+	sBroadphase = new btGridBroadphaseCl(overlappingPairCache,btVector3(3.f, 3.f, 3.f), 32, 32, 32,NUM_OBJECTS, NUM_OBJECTS, MAX_PAIRS_PER_SMALL_BODY, 100.f, 16,
 		g_cxMainContext ,g_device,g_cqCommandQue);
 #else
 	sBroadphase = new btGpu3DGridBroadphase(btVector3(10.f, 10.f, 10.f), 32, 32, 32,NUM_OBJECTS, NUM_OBJECTS, 64, 100.f, 16);
@@ -780,7 +824,7 @@ void InitShaders()
 				instance_scale_ptr[index*3] = 1;
 				instance_scale_ptr[index*3+1] = 1;
 				instance_scale_ptr[index*3+2] = 1;
-				
+
 
 				index++;
 			}
@@ -841,10 +885,10 @@ void InitShaders()
 void updateCamera() {
 
 
-	
+
 	btVector3 m_cameraUp(0,1,0);
 	int m_forwardAxis=2;
-	
+
 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
@@ -884,11 +928,11 @@ void updateCamera() {
 	float aspect;
 	btVector3 extents;
 
-	if (m_glutScreenWidth > m_glutScreenHeight) 
+	if (m_glutScreenWidth > m_glutScreenHeight)
 	{
 		aspect = m_glutScreenWidth / (float)m_glutScreenHeight;
 		extents.setValue(aspect * 1.0f, 1.0f,0);
-	} else 
+	} else
 	{
 		aspect = m_glutScreenHeight / (float)m_glutScreenWidth;
 		extents.setValue(1.0f, aspect*1.f,0);
@@ -908,17 +952,17 @@ void updateCamera() {
 		glLoadIdentity();
 	} else
 	{
-		if (m_glutScreenWidth > m_glutScreenHeight) 
+		if (m_glutScreenWidth > m_glutScreenHeight)
 		{
 			glFrustum (-aspect * m_frustumZNear, aspect * m_frustumZNear, -m_frustumZNear, m_frustumZNear, m_frustumZNear, m_frustumZFar);
-		} else 
+		} else
 		{
 			glFrustum (-aspect * m_frustumZNear, aspect * m_frustumZNear, -m_frustumZNear, m_frustumZNear, m_frustumZNear, m_frustumZFar);
 		}
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
-		gluLookAt(m_cameraPosition[0], m_cameraPosition[1], m_cameraPosition[2], 
-			m_cameraTargetPosition[0], m_cameraTargetPosition[1], m_cameraTargetPosition[2], 
+		gluLookAt(m_cameraPosition[0], m_cameraPosition[1], m_cameraPosition[2],
+			m_cameraTargetPosition[0], m_cameraTargetPosition[1], m_cameraTargetPosition[2],
 			m_cameraUp.getX(),m_cameraUp.getY(),m_cameraUp.getZ());
 	}
 
@@ -984,7 +1028,7 @@ void myinit()
 				for(int x=0;x<256;++x)
 				{
 					const int		s=x>>5;
-					const GLubyte	b=180;					
+					const GLubyte	b=180;
 					GLubyte			c=b+((s+t&1)&1)*(255-b);
 					pi[0]=c;
 					pi[1]=c;
@@ -1104,7 +1148,7 @@ void updatePos()
 		writeTransforms();
 #endif
 
-	} 
+	}
 	else
 	{
 
@@ -1126,16 +1170,16 @@ void updatePos()
 			ciErrNum = clSetKernelArg(g_sineWaveKernel, 3, sizeof(cl_mem), (void*)&gLinVelMem);
 			ciErrNum = clSetKernelArg(g_sineWaveKernel, 4, sizeof(cl_mem), (void*)&gAngVelMem);
 			ciErrNum = clSetKernelArg(g_sineWaveKernel, 5, sizeof(cl_mem), (void*)&gBodyTimes);
-			
-			
-			
 
-		
+
+
+
+
 			size_t	numWorkItems = workGroupSize*((NUM_OBJECTS + (workGroupSize)) / workGroupSize);
 			ciErrNum = clEnqueueNDRangeKernel(g_cqCommandQue, g_sineWaveKernel, 1, NULL, &numWorkItems, &workGroupSize,0 ,0 ,0);
 			oclCHECKERROR(ciErrNum, CL_SUCCESS);
 		}
-	
+
 		ciErrNum = clEnqueueReleaseGLObjects(g_cqCommandQue, 1, &clBuffer, 0, 0, 0);
 		oclCHECKERROR(ciErrNum, CL_SUCCESS);
 		clFinish(g_cqCommandQue);
@@ -1186,7 +1230,7 @@ void cpuBroadphase()
 	}
 
 #ifdef USE_NEW
-	
+
 
 #else
 	sBroadphase->calculateOverlappingPairs(0);
@@ -1210,7 +1254,7 @@ void cpuBroadphase()
 
 	//now color the overlap
 
-	
+
 
 	glUnmapBuffer( GL_ARRAY_BUFFER);
 	//if this glFinish is removed, the animation is not always working/blocks
@@ -1218,13 +1262,206 @@ void cpuBroadphase()
 	glFlush();
 }
 
+
+
+void myQuantize(unsigned int* out, const btVector3& point,int isMax, const btVector3& bvhAabbMin, const btVector3& bvhAabbMax)
+{
+
+	btVector3 aabbSize = bvhAabbMax - bvhAabbMin;
+	btVector3 bvhQuantization = btVector3(btScalar(0xffffffff),btScalar(0xffffffff),btScalar(0xffffffff)) / aabbSize;
+
+	btAssert(point.getX() <= bvhAabbMax.getX());
+	btAssert(point.getY() <= bvhAabbMax.getY());
+	btAssert(point.getZ() <= bvhAabbMax.getZ());
+
+	btAssert(point.getX() >= bvhAabbMin.getX());
+	btAssert(point.getY() >= bvhAabbMin.getY());
+	btAssert(point.getZ() >= bvhAabbMin.getZ());
+
+	btVector3 v = (point - bvhAabbMin) * bvhQuantization;
+	///Make sure rounding is done in a way that unQuantize(quantizeWithClamp(...)) is conservative
+	///end-points always set the first bit, so that they are sorted properly (so that neighbouring AABBs overlap properly)
+	///@todo: double-check this
+	if (isMax)
+	{
+		out[0] = (unsigned int) (((unsigned int)(v.getX()+btScalar(1.)) | 1));
+		out[1] = (unsigned int) (((unsigned int)(v.getY()+btScalar(1.)) | 1));
+		out[2] = (unsigned int) (((unsigned int)(v.getZ()+btScalar(1.)) | 1));
+	} else
+	{
+		out[0] = (unsigned int) (((unsigned int)(v.getX()) & 0xfffffffe));
+		out[1] = (unsigned int) (((unsigned int)(v.getY()) & 0xfffffffe));
+		out[2] = (unsigned int) (((unsigned int)(v.getZ()) & 0xfffffffe));
+	}
+}
+
+void checkPairArrays(btAlignedObjectArray<btInt2>& sapPairsHost,btAlignedObjectArray<btInt2>& gridPairsHost, btAlignedObjectArray<btAabb2Host>& hostAabbs)
+{
+	{
+		for (int i=0;i<sapPairsHost.size();i++)
+		{
+			if (sapPairsHost[i].x>sapPairsHost[i].y)
+				btSwap(sapPairsHost[i].x,sapPairsHost[i].y);
+		}
+
+		for (int i=0;i<gridPairsHost.size();i++)
+		{
+			if (gridPairsHost[i].x>gridPairsHost[i].y)
+				btSwap(gridPairsHost[i].x,gridPairsHost[i].y);
+		}
+
+		sorter->executeHost((btAlignedObjectArray<btSortData>&)sapPairsHost);
+		sorter->executeHost((btAlignedObjectArray<btSortData>&)gridPairsHost);
+
+		for (int i=0;i<sapPairsHost.size();i++)
+		{
+			btSwap(sapPairsHost[i].x,sapPairsHost[i].y);
+		}
+
+		for (int i=0;i<gridPairsHost.size();i++)
+		{
+			btSwap(gridPairsHost[i].x,gridPairsHost[i].y);
+		}
+
+		sorter->executeHost((btAlignedObjectArray<btSortData>&)sapPairsHost);
+		sorter->executeHost((btAlignedObjectArray<btSortData>&)gridPairsHost);
+	}
+	int maxSize = gridPairsHost.size()>sapPairsHost.size()?gridPairsHost.size():sapPairsHost.size();
+
+
+	int i=0;
+	int j=0;
+	i=0;
+
+	for (;i<maxSize;)
+	{
+		if (i<sapPairsHost.size() && j<gridPairsHost.size())
+		{
+			if ((sapPairsHost[i].x != gridPairsHost[j].x) ||
+				(sapPairsHost[i].y != gridPairsHost[j].y))
+			{
+				printf("diff at %d, %d:", i,j);
+				if (sapPairsHost[i].x == gridPairsHost[j].x)
+				{
+					if (sapPairsHost[i].y < gridPairsHost[j].y)
+					{
+						printf("sapPairsHost[%d] = %d,%d\n",i,sapPairsHost[i].x,sapPairsHost[i].y);
+						btAabb2Host a = hostAabbs[sapPairsHost[i].x];
+						btAabb2Host b = hostAabbs[sapPairsHost[i].y];
+						printf("a.m_min=(%f,%f,%f),a.m_max(%f,%f,%f)\n",
+							a.m_min[0],a.m_min[1],a.m_min[2],
+							a.m_max[0],a.m_max[1],a.m_max[2]);
+						printf("b.m_min=(%f,%f,%f),b.m_max(%f,%f,%f)\n",
+							b.m_min[0],b.m_min[1],b.m_min[2],
+							b.m_max[0],b.m_max[1],b.m_max[2]);
+
+						if (TestAabbAgainstAabb2((btVector3&)a.m_min,(btVector3&)a.m_max,(btVector3&)b.m_min,(btVector3&)b.m_max))
+						{
+							printf("indeed overlapping\n");
+						} else
+						{
+							printf("false overlapping\n");
+						}
+						i++;
+					} else
+					{
+						printf("gridPairsHost[%d] = %d,%d\n",j,gridPairsHost[j].x,gridPairsHost[j].y);
+						btAabb2Host a = hostAabbs[gridPairsHost[i].x];
+						btAabb2Host b = hostAabbs[gridPairsHost[i].y];
+						printf("a.m_min=(%f,%f,%f),a.m_max(%f,%f,%f)\n",
+							a.m_min[0],a.m_min[1],a.m_min[2],
+							a.m_max[0],a.m_max[1],a.m_max[2]);
+						printf("b.m_min=(%f,%f,%f),b.m_max(%f,%f,%f)\n",
+							b.m_min[0],b.m_min[1],b.m_min[2],
+							b.m_max[0],b.m_max[1],b.m_max[2]);
+
+						if (TestAabbAgainstAabb2((btVector3&)a.m_min,(btVector3&)a.m_max,(btVector3&)b.m_min,(btVector3&)b.m_max))
+						{
+							printf("indeed overlapping\n");
+						} else
+						{
+							printf("false overlapping\n");
+						}
+						j++;
+					}
+				} else
+				{
+					if (sapPairsHost[i].x < gridPairsHost[j].x)
+					{
+						printf("sapPairsHost[%d] = %d,%d\n",i,sapPairsHost[i].x,sapPairsHost[i].y);
+						btAabb2Host a = hostAabbs[sapPairsHost[i].x];
+						btAabb2Host b = hostAabbs[sapPairsHost[i].y];
+						printf("a.m_min=(%f,%f,%f),a.m_max(%f,%f,%f)\n",
+							a.m_min[0],a.m_min[1],a.m_min[2],
+							a.m_max[0],a.m_max[1],a.m_max[2]);
+						printf("b.m_min=(%f,%f,%f),b.m_max(%f,%f,%f)\n",
+							b.m_min[0],b.m_min[1],b.m_min[2],
+							b.m_max[0],b.m_max[1],b.m_max[2]);
+
+						if (TestAabbAgainstAabb2((btVector3&)a.m_min,(btVector3&)a.m_max,(btVector3&)b.m_min,(btVector3&)b.m_max))
+						{
+							printf("indeed overlapping\n");
+						} else
+						{
+							printf("false overlapping\n");
+						}
+						i++;
+					} else
+					{
+						printf("gridPairsHost[%d] = %d,%d\n",j,gridPairsHost[j].x,gridPairsHost[j].y);
+						btAabb2Host a = hostAabbs[gridPairsHost[i].x];
+						btAabb2Host b = hostAabbs[gridPairsHost[i].y];
+						printf("a.m_min=(%f,%f,%f),a.m_max(%f,%f,%f)\n",
+							a.m_min[0],a.m_min[1],a.m_min[2],
+							a.m_max[0],a.m_max[1],a.m_max[2]);
+						printf("b.m_min=(%f,%f,%f),b.m_max(%f,%f,%f)\n",
+							b.m_min[0],b.m_min[1],b.m_min[2],
+							b.m_max[0],b.m_max[1],b.m_max[2]);
+						if (TestAabbAgainstAabb2((btVector3&)a.m_min,(btVector3&)a.m_max,(btVector3&)b.m_min,(btVector3&)b.m_max))
+						{
+							printf("indeed overlapping\n");
+						} else
+						{
+							printf("false overlapping\n");
+						}
+						j++;
+					}
+				}
+
+			} else
+			{
+				i++;
+				j++;
+			}
+		} else
+		{
+			j++;
+			i++;
+			if (i<sapPairsHost.size())
+			{
+				printf("sapPairsHost[i] = %d,%d\n",i,sapPairsHost[i].x,sapPairsHost[i].y);
+				btAabb2Host a = hostAabbs[sapPairsHost[i].x];
+				btAabb2Host b = hostAabbs[sapPairsHost[i].y];
+			}
+
+			if (i<gridPairsHost.size())
+			{
+				printf("gridPairsHost[i] = %d,%d\n",i,gridPairsHost[i].x,gridPairsHost[i].y);
+				btAabb2Host a = hostAabbs[gridPairsHost[i].x];
+				btAabb2Host b = hostAabbs[gridPairsHost[i].y];
+			}
+		}
+	}
+
+
+}
 void	broadphase()
 {
 	if (useCPU)
 	{
 		cpuBroadphase();
 
-	} 
+	}
 	else
 	{
 
@@ -1246,13 +1483,410 @@ void	broadphase()
 			sBroadphase->calculateOverlappingPairs(0, NUM_OBJECTS);
 
 
-			gFpIO.m_dAllOverlappingPairs = sBroadphase->m_dAllOverlappingPairs;
-			gFpIO.m_numOverlap = sBroadphase->m_numPrefixSum;
+			gFpIO.m_dAllOverlappingPairs = sBroadphase->getOverlappingPairBuffer();
+			gFpIO.m_numOverlap = sBroadphase->getNumOverlap();
 
-			colorPairsOpenCL(gFpIO);
+//#define VALIDATE_BROADPHASE
+#ifdef VALIDATE_BROADPHASE
+
+			int axis = 0;
+			int validatedNumPairs = -1;
+			int goldValidatedPairs = -1;
+			btOpenCLArray<btAabb2Host> gpuUnsortedAabbs(g_cxMainContext, g_cqCommandQue);
+			gpuUnsortedAabbs.setFromOpenCLBuffer(gFpIO.m_dAABB,gFpIO.m_numObjects);
+
+			btAlignedObjectArray<btAabb2Host> unsortedHostAabbs;
+			gpuUnsortedAabbs.copyToHost(unsortedHostAabbs);
+
+//#define VALIDATE_HOST_NOW
+#ifdef VALIDATE_HOST_NOW
+
+			{
+				BT_PROFILE("resize\n");
+				hostData.resize(gFpIO.m_numObjects);
+			}
+
+			btAlignedObjectArray<btAabb2Host> hostAabbs;
+			gpuUnsortedAabbs.copyToHost(hostAabbs);
+
+			{
+				BT_PROFILE("FloatFlip\n");
+				for (int i=0;i<gFpIO.m_numObjects;i++)
+				{
+					hostAabbs[i].m_minIndices[3] = i;//original index
+					hostAabbs[i].m_unsignedMaxIndices[3] = FloatFlip(hostAabbs[i].m_min[axis]);
+					hostData[i].m_key = FloatFlip(hostAabbs[i].m_min[axis]);
+					hostData[i].m_value = i;
+				}
+			}
+
+
+
+			{
+				BT_PROFILE("sort axis\n");
+				aabbCompare comp;
+				comp.m_axis = axis;
+
+				//hostAabbs.heapSort(comp);
+				hostAabbs.quickSort(comp);
+			}
+
+			btAlignedObjectArray<btInt2> bruteForcePairs;
+			{
+
+
+				BT_PROFILE("sweep axis\n");
+
+				for (int i=0;i<gFpIO.m_numObjects;i++)
+				{
+/*					if (i==1611)
+					{
+						printf("catch me\n");
+					}
+					*/
+
+					//int referenceMin = FloatFlip(hostAabbs[i].m_max[axis])+2;
+					float reference = hostAabbs[i].m_max[axis];
+
+					for (int j=i+1;j<gFpIO.m_numObjects;j++)
+					{
+/*						if(j==3259)
+						{
+							printf("catch me\n");
+						}
+	*/
+						if( reference < hostAabbs[j].m_min[axis])
+						//if( reference < hostAabbs[j].m_maxIndices[3])
+						{
+							break;
+						}
+
+
+
+
+						if (TestAabbAgainstAabb2((btVector3&)hostAabbs[i].m_min, (btVector3&)hostAabbs[i].m_max,
+							(btVector3&)hostAabbs[j].m_min,(btVector3&)hostAabbs[j].m_max))
+						{
+							btInt2 pair;
+							pair.x = hostAabbs[i].m_minIndices[3];//store the original index in the unsorted aabb array
+							pair.y = hostAabbs[j].m_minIndices[3];
+							bruteForcePairs.push_back(pair);
+						}
+					}
+				}
+				goldValidatedPairs = bruteForcePairs.size();
+			}
+#endif //VALIDATE_HOST_NOW
+
+			//btOpenCLArray<btInt2> gpuPairs(g_cxMainContext, g_cqCommandQue);
+			//gpuPairs.setFromOpenCLBuffer(sBroadphase->m_dAllOverlappingPairs,sBroadphase->m_numPrefixSum);
+
+			{
+			BT_PROFILE("validate");
+			//check if results are valid
+			//btAlignedObjectArray<btInt2> hostPairs;
+			//gpuPairs.copyToHost(hostPairs);
+
+
+
+
+
+			clFinish(g_cqCommandQue);
+
+			btOpenCLArray<btAabb2Host> gpuSortedAabbs(g_cxMainContext, g_cqCommandQue);
+
+//#define FLIP_AT_HOST
+//#define SORT_HOST
+
+#if defined (SORT_HOST) || defined (FLIP_AT_HOST)
+
+#endif//SORT_HOST
+
+			//printf("-----------------------------------------------\n");
+			//printf("Validating:\n");
+
+			{
+				BT_PROFILE("find axis\n");
+				//E Find the axis along which all rigid bodies are most widely positioned
+
+
+
+				//minCoord.setMin(minAabb);
+				//maxCoord.setMax(maxAabb);
+
+#if 0
+				if (0)
+				{
+					btVector3 s(0,0,0), s2(0,0,0);
+
+					for(int i=0;i<gFpIO.m_numObjects;i++) {
+						btVector3& minAabb = (btVector3&)hostAabbs[i].m_min;
+						btVector3& maxAabb = (btVector3& )hostAabbs[i].m_max;
+
+
+						btVector3 c = (maxAabb+minAabb)*0.5;
+						s += c;
+						s2 += c*c;
+					}
+					btVector3 v = s2 - s*s / (float)gFpIO.m_numObjects;
+					if(v[1] > v[0]) axis = 1;
+					if(v[2] > v[axis]) axis = 2;
+				}
+#endif
+
+
+
+			}
+
+
+
+			//sort on the axis
+
+
+#ifdef SORT_HOST
+
+
+
+
+
+			gpuSortedAabbs.copyFromHost(hostAabbs);
+
+#else //SORT_HOST
+
+
+			clFinish(g_cqCommandQue);
+			{
+				BT_PROFILE("GPU_RADIX SORT");
+
+				btOpenCLArray<btSortData> gpuSortData(g_cxMainContext, g_cqCommandQue);
+
+
+#ifdef FLIP_AT_HOST
+
+
+
+
+
+
+				{
+					BT_PROFILE("copyFromHost");
+					gpuSortData.copyFromHost(hostData);
+					clFinish(g_cqCommandQue);
+				}
+#else//FLIP_AT_HOST
+				gpuSortData.resize(gFpIO.m_numObjects);
+
+
+				//__kernel void   flipFloat( __global const btAabbCL* aabbs, volatile __global int2* sortData, int numObjects, int axis)
+				{
+					BT_PROFILE("flipFloatKernel");
+					btBufferInfoCL bInfo[] = { btBufferInfoCL( gpuUnsortedAabbs.getBufferCL(), true ), btBufferInfoCL( gpuSortData.getBufferCL())};
+					btLauncherCL launcher(g_cqCommandQue, g_flipFloatKernel );
+					launcher.setBuffers( bInfo, sizeof(bInfo)/sizeof(btBufferInfoCL) );
+					launcher.setConst( gFpIO.m_numObjects  );
+					launcher.setConst( axis  );
+
+					int num = gFpIO.m_numObjects;
+					launcher.launch1D( num);
+					clFinish(g_cqCommandQue);
+				}
+
+#endif//FLIP_AT_HOST
+
+				{
+					BT_PROFILE("actual sort\n");
+					sorter->execute(gpuSortData);
+					clFinish(g_cqCommandQue);
+				}
+
+#ifdef 	FLIP_AT_HOST
+				{
+					BT_PROFILE("copyToHost\n");
+					if (gpuSortData.size())
+					{
+						gpuSortData.copyToHost(hostData);
+					}
+					clFinish(g_cqCommandQue);
+				}
+
+				if (0)//not necessary, only for debugging
+				{
+					BT_PROFILE("IFloatFlip\n");
+					for (int i=0;i<hostData.size();i++)
+						hostData[i].m_key = IFloatFlip(hostData[i].m_key);
+				}
+				{
+					BT_PROFILE("resize2\n");
+					sortedHostAabbs.resize(gFpIO.m_numObjects);
+				}
+
+				btAlignedObjectArray<btAabb2Host> hostAabbs;
+			gpuUnsortedAabbs.copyToHost(hostAabbs);
+
+				{
+					BT_PROFILE("scatter\n");
+					for (int i=0;i<gFpIO.m_numObjects;i++)
+					{
+						sortedHostAabbs[i] = hostAabbs[hostData[i].m_value];
+					}
+					clFinish(g_cqCommandQue);
+				}
+
+				gpuSortedAabbs.copyFromHost(sortedHostAabbs);
+
+
+
+#else //FLIP_AT_HOST
+
+				gpuSortedAabbs.resize(gFpIO.m_numObjects);
+				{
+					BT_PROFILE("scatterKernel");
+					btBufferInfoCL bInfo[] = { btBufferInfoCL( gpuUnsortedAabbs.getBufferCL(), true ), btBufferInfoCL( gpuSortData.getBufferCL(),true),btBufferInfoCL(gpuSortedAabbs.getBufferCL())};
+					btLauncherCL launcher(g_cqCommandQue, g_scatterKernel );
+					launcher.setBuffers( bInfo, sizeof(bInfo)/sizeof(btBufferInfoCL) );
+					launcher.setConst( gFpIO.m_numObjects  );
+					int num = gFpIO.m_numObjects;
+					launcher.launch1D( num);
+					clFinish(g_cqCommandQue);
+
+				}
+
+			//gpuSortedAabbs.resize(gFpIO.m_numObjects);
+#endif//FLIP_AT_HOST
+			}
+
+
+
+
+#endif //SORT_HOST
+
+
+			//g_sapKernel
+
+			int maxPairs = MAX_PAIRS_PER_SMALL_BODY * NUM_OBJECTS;//256*1024;
+
+
+			btOpenCLArray<btInt2> newPairs(g_cxMainContext, g_cqCommandQue);
+			newPairs.resize(maxPairs);
+			//newPairs.setFromOpenCLBuffer(gFpIO.m_dAllOverlappingPairs,maxPairs);
+
+			//newPairs.resize(maxPairs);
+
+
+
+			btAlignedObjectArray<int> hostPairCount;
+			hostPairCount.push_back(0);
+			btOpenCLArray<int> pairCount(g_cxMainContext, g_cqCommandQue);
+			{
+			pairCount.copyFromHost(hostPairCount);
+			}
+			{
+				BT_PROFILE("g_sapKernel");
+				btBufferInfoCL bInfo[] = { btBufferInfoCL( gpuSortedAabbs.getBufferCL(), true ), btBufferInfoCL( newPairs.getBufferCL() ), btBufferInfoCL(pairCount.getBufferCL())};
+				btLauncherCL launcher(g_cqCommandQue, g_sapKernel);
+				launcher.setBuffers( bInfo, sizeof(bInfo)/sizeof(btBufferInfoCL) );
+				launcher.setConst( gFpIO.m_numObjects  );
+				launcher.setConst( axis  );
+				launcher.setConst( maxPairs  );
+
+
+				int num = gFpIO.m_numObjects;
+				launcher.launch1D( num);
+				clFinish(g_cqCommandQue);
+			}
+
+			pairCount.copyToHost(hostPairCount);
+			btAssert(hostPairCount.size()==1);
+			btAssert(hostPairCount[0] >=0);
+			btAssert(hostPairCount[0] <maxPairs);
+
+			if (hostPairCount[0])
+			{
+				//btAlignedObjectArray<btInt2> myHostPairs;
+				newPairs.resize(hostPairCount[0]);
+				//newPairs.copyToHost(myHostPairs);
+				//btAssert(gFpIO.m_numOverlap == newPairs.size());
+
+				gFpIO.m_dAllOverlappingPairs = newPairs.getBufferCL();
+				gFpIO.m_numOverlap = newPairs.size();
+				colorPairsOpenCL(gFpIO);
+				gFpIO.m_dAllOverlappingPairs = sBroadphase->m_dAllOverlappingPairs;
+				gFpIO.m_numOverlap = sBroadphase->getNumOverlap();
+
+				validatedNumPairs = newPairs.size();
+				btAlignedObjectArray<btInt2> sapPairsHost;
+				btAlignedObjectArray<btInt2> gridPairsHost;
+
+				newPairs.copyToHost(sapPairsHost);
+				//gpuPairs.copyToHost(gridPairsHost);
+
+
+#ifdef VALIDATE_HOST_NOW
+				checkPairArrays(bruteForcePairs,gridPairsHost,unsortedHostAabbs);
+				//checkPairArrays(sapPairsHost,bruteForcePairs,unsortedHostAabbs);
+#endif
+
+				//checkPairArrays(sapPairsHost,gridPairsHost,unsortedHostAabbs);
+
+
+			}
+
+			static bool once = true;
+			if (once)
+			{
+				once=false;
+				printf("# pairs: %d\n", hostPairCount[0]);
+			}
+			if (0)
+			{
+				BT_PROFILE("printf");
+				static int numFailures = 0;
+				if (validatedNumPairs != gFpIO.m_numOverlap)
+				{
+					if (1)//printStats)
+					{
+						printf("FAIL: different # pairs, sap = %d, grid = %d\n", validatedNumPairs,gFpIO.m_numOverlap);
+						printf("----------------------------------------------------\n");
+
+					}
+
+					//compare the results
+
+
+					numFailures++;
+					//btAssert(0);
+				} else
+				{
+					if (1)//printStats)
+					{
+						printf("CORRECT: same # pairs: %d\n", validatedNumPairs);
+						printf("----------------------------------------------------\n");
+
+					}
+				}
+				if (1)//printStats)
+				{
+					printf("num diffs= %d\n",numFailures);
+					printf("----------------------------------------------------\n");
+				}
+			}
+
+
+
+			//sort arrays
+			//compare arrays
+			//gFpIO.m_numOverlap = hostPairCount[0];
+			}
+
+
+#else
+		colorPairsOpenCL(gFpIO);
+#endif //VALIDATE_BROADPHASE
+
+
 
 		}
-	
+
 		ciErrNum = clEnqueueReleaseGLObjects(g_cqCommandQue, 1, &clBuffer, 0, 0, 0);
 		oclCHECKERROR(ciErrNum, CL_SUCCESS);
 		clFinish(g_cqCommandQue);
@@ -1267,6 +1901,8 @@ void	broadphase()
 
 void RenderScene(void)
 {
+	  CProfileManager::Reset();
+
 
 #if 0
 	float modelview[20]={0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9};
@@ -1280,7 +1916,7 @@ void RenderScene(void)
 
 	updateCamera();
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	//render coordinate system
 	glBegin(GL_LINES);
@@ -1359,7 +1995,7 @@ void RenderScene(void)
 	glVertexAttribDivisor(4, 0);
 	glVertexAttribDivisor(5, 1);
 	glVertexAttribDivisor(6, 1);
-	
+
 	glUseProgram(instancingShader);
 	glUniform1f(angle_loc, 0);
 	GLfloat pm[16];
@@ -1388,7 +2024,19 @@ void RenderScene(void)
 	glutPostRedisplay();
 
 	GLint err = glGetError();
-	//assert(err==GL_NO_ERROR);
+	assert(err==GL_NO_ERROR);
+
+	 CProfileManager::Increment_Frame_Counter();
+
+
+	static int firstStats = 10;
+    if (printStats || firstStats==1)
+	{
+        CProfileManager::dumpAll();
+	}
+	firstStats--;
+
+>>>>>>> 4ffca708ec4d02cbc19cbf740d007ddd82ae7f96
 }
 
 
@@ -1411,7 +2059,7 @@ void ChangeSize(int w, int h)
 #ifdef RECREATE_CL_AND_SHADERS_ON_RESIZE
 	InitCL();
 	InitShaders();
-	
+
 	g_interopBuffer = new btOpenCLGLInteropBuffer(g_cxMainContext,g_cqCommandQue,cube_vbo);
 	clFinish(g_cqCommandQue);
 	g_sineWaveKernel = btOpenCLUtils::compileCLKernelFromString(g_cxMainContext, interopKernelString, "interopKernel" );
@@ -1470,6 +2118,14 @@ void ShutdownRC(void)
 	glDeleteVertexArrays(1, &cube_vao);
 }
 
+//#define TEST_BULLET_ADL_OPENCL_HOST_CODE
+
+#ifdef TEST_BULLET_ADL_OPENCL_HOST_CODE
+#include "btRadixSort32CL.h"
+#include "btFillCL.h"
+#include "btPrefixScanCL.h"
+#endif //TEST_BULLET_ADL_OPENCL_HOST_CODE
+
 int main(int argc, char* argv[])
 {
 	srand(0);
@@ -1504,29 +2160,62 @@ int main(int argc, char* argv[])
 	//ChangeSize(m_glutScreenWidth,m_glutScreenHeight);
 
 	InitCL();
-	
 
-#define CUSTOM_CL_INITIALIZATION
-#ifdef CUSTOM_CL_INITIALIZATION
-	g_deviceCL = new adl::DeviceCL();
-	g_deviceCL->m_deviceIdx = g_device;
-	g_deviceCL->m_context = g_cxMainContext;
-	g_deviceCL->m_commandQueue = g_cqCommandQue;
+	//test sorting
+#ifdef TEST_BULLET_ADL_OPENCL_HOST_CODE
+	btRadixSort32CL sort(g_cxMainContext,g_device, g_cqCommandQue);
+	btOpenCLArray<btSortData> keyValuesInOut(g_cxMainContext,g_cqCommandQue);
 
-#else
-	DeviceUtils::Config cfg;
-	cfg.m_type = DeviceUtils::Config::DEVICE_CPU;
-	g_deviceCL = DeviceUtils::allocate( TYPE_CL, cfg );
-#endif
+	btAlignedObjectArray<btSortData> hostData;
+	btSortData key; key.m_key = 2; key.m_value = 2;
+	hostData.push_back(key); key.m_key = 1; key.m_value = 1;
+	hostData.push_back(key);
+
+	keyValuesInOut.copyFromHost(hostData);
+	sort.execute(keyValuesInOut);
+	keyValuesInOut.copyToHost(hostData);
+
+	btFillCL filler(g_cxMainContext,g_device, g_cqCommandQue);
+	btInt2 value;
+	value.x = 5;
+	value.y = 5;
+	btOpenCLArray<btInt2> testArray(g_cxMainContext,g_cqCommandQue);
+	testArray.resize(1024);
+	filler.execute(testArray,value, testArray.size());
+	btAlignedObjectArray<btInt2> hostInt2Array;
+	testArray.copyToHost(hostInt2Array);
+
+
+	btPrefixScanCL scan(g_cxMainContext,g_device, g_cqCommandQue);
+
+	unsigned int sum;
+	btOpenCLArray<unsigned int>src(g_cxMainContext,g_cqCommandQue);
+
+	src.resize(16);
+
+	filler.execute(src,2, src.size());
+
+	btAlignedObjectArray<unsigned int>hostSrc;
+	src.copyToHost(hostSrc);
+
+
+	btOpenCLArray<unsigned int>dest(g_cxMainContext,g_cqCommandQue);
+	scan.execute(src,dest,src.size(),&sum);
+	dest.copyToHost(hostSrc);
+#endif //TEST_BULLET_ADL_OPENCL_HOST_CODE
+
+
 
 	int size = NUM_OBJECTS;
-	adl::Buffer<btVector3> linvelBuf( g_deviceCL, size );
-	adl::Buffer<btVector3> angvelBuf( g_deviceCL, size );
-	adl::Buffer<float>		bodyTimes(g_deviceCL,size);
+	btOpenCLArray<btVector3> linvelBuf( g_cxMainContext,g_cqCommandQue,size,false );
+	btOpenCLArray<btVector3> angvelBuf( g_cxMainContext,g_cqCommandQue,size,false );
+	btOpenCLArray<float>		bodyTimes(g_cxMainContext,g_cqCommandQue,size,false );
 
-	gLinVelMem = (cl_mem)linvelBuf.m_ptr;
-	gAngVelMem = (cl_mem)angvelBuf.m_ptr;
-	gBodyTimes = (cl_mem)bodyTimes.m_ptr;
+
+
+	gLinVelMem = (cl_mem)linvelBuf.getBufferCL();
+	gAngVelMem = (cl_mem)angvelBuf.getBufferCL();
+	gBodyTimes = (cl_mem)bodyTimes.getBufferCL();
 
 	btVector3* linVelHost= new btVector3[size];
 	btVector3* angVelHost = new btVector3[size];
@@ -1539,15 +2228,15 @@ int main(int argc, char* argv[])
 		bodyTimesHost[i] = i*(1024.f/NUM_OBJECTS);//double(randrange(0x2fffffff))/double(0x2fffffff)*float(1024);//NUM_OBJECTS);
 	}
 
-	linvelBuf.write(linVelHost,NUM_OBJECTS);
-	angvelBuf.write(angVelHost,NUM_OBJECTS);
-	bodyTimes.write(bodyTimesHost,NUM_OBJECTS);
+	linvelBuf.copyFromHostPointer(linVelHost,NUM_OBJECTS);
+	angvelBuf.copyFromHostPointer(angVelHost,NUM_OBJECTS);
+	bodyTimes.copyFromHostPointer(bodyTimesHost,NUM_OBJECTS);
 
-	adl::DeviceUtils::waitForCompletion( g_deviceCL );
+	clFinish(g_cqCommandQue);
 
 
 	InitShaders();
-	
+
 	g_interopBuffer = new btOpenCLGLInteropBuffer(g_cxMainContext,g_cqCommandQue,cube_vbo);
 	clFinish(g_cqCommandQue);
 
@@ -1555,8 +2244,21 @@ int main(int argc, char* argv[])
 	g_sineWaveKernel = btOpenCLUtils::compileCLKernelFromString(g_cxMainContext, g_device,interopKernelString, "sineWaveKernel" );
 	initFindPairs(gFpIO, g_cxMainContext, g_device, g_cqCommandQue, NUM_OBJECTS);
 
-	
+	char* src = 0;
+	cl_int errNum=0;
 
+	sapProg = btOpenCLUtils::compileCLProgramFromString(g_cxMainContext,g_device,src,&errNum,"","../../opencl/broadphase_benchmark/sap.cl");
+	btAssert(errNum==CL_SUCCESS);
+
+	g_sapKernel = btOpenCLUtils::compileCLKernelFromString(g_cxMainContext, g_device,interopKernelString, "computePairsKernel",&errNum,sapProg );
+	btAssert(errNum==CL_SUCCESS);
+
+	g_flipFloatKernel = btOpenCLUtils::compileCLKernelFromString(g_cxMainContext, g_device,interopKernelString, "flipFloatKernel",&errNum,sapProg );
+
+	g_scatterKernel = btOpenCLUtils::compileCLKernelFromString(g_cxMainContext, g_device,interopKernelString, "scatterKernel",&errNum,sapProg );
+
+
+	sorter = new btRadixSort32CL(g_cxMainContext,g_device, g_cqCommandQue);
 
 	glutMainLoop();
 	ShutdownRC();
