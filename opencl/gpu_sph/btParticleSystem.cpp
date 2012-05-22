@@ -33,6 +33,7 @@ struct btParticle
 }
 struct	CustomDispatchData
 {
+    //should also allow for DirectX?
     GLuint m_particlesVBO;
     btOpenCLGLInteropBuffer<btParticle>* m_particlesGL;
     btOpenCLArray<btParticle> m_particles;
