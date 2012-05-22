@@ -1,10 +1,10 @@
 /*
-Copyright (c) 2012 Advanced Micro Devices, Inc.  
+Copyright (c) 2012 Advanced Micro Devices, Inc.
 
 This software is provided 'as-is', without any express or implied warranty.
 In no event will the authors be held liable for any damages arising from the use of this software.
-Permission is granted to anyone to use this software for any purpose, 
-including commercial applications, and to alter it and redistribute it freely, 
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it freely,
 subject to the following restrictions:
 
 1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
@@ -71,7 +71,7 @@ void ConvexHeightField::create( const float4* vtxBuffer, const int4* idxBuffer, 
 				{
 					float4 from = make_float4(0.f);
 					float4 bCrd;
-					float fraction = CollideUtils::castRay( vtxBuffer[idxBuffer[itri].x], vtxBuffer[idxBuffer[itri].y], vtxBuffer[idxBuffer[itri].z], 
+					float fraction = CollideUtils::castRay( vtxBuffer[idxBuffer[itri].x], vtxBuffer[idxBuffer[itri].y], vtxBuffer[idxBuffer[itri].z],
 						from, v, 0.0f, &bCrd );
 
 					if( fraction > 0.f )
@@ -204,7 +204,7 @@ ConvexHeightField::ConvexHeightField(const float4* eqn, int nEqn)
 				m_scale = max2( m_scale, n.w );
 			}
 		}
-		
+
 		for(u32 faceIdx=0; faceIdx<6; faceIdx++)
 		{
 			for(int i=0; i<HEIGHT_RES; i++) for(int j=0; j<HEIGHT_RES; j++)

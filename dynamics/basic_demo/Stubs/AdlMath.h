@@ -1,10 +1,10 @@
 /*
-Copyright (c) 2012 Advanced Micro Devices, Inc.  
+Copyright (c) 2012 Advanced Micro Devices, Inc.
 
 This software is provided 'as-is', without any express or implied warranty.
 In no event will the authors be held liable for any damages arising from the use of this software.
-Permission is granted to anyone to use this software for any purpose, 
-including commercial applications, and to alter it and redistribute it freely, 
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it freely,
 subject to the following restrictions:
 
 1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
@@ -34,11 +34,11 @@ subject to the following restrictions:
     #define _MEM_CLASSALIGN16 __declspec(align(16))
     #define _MEM_CLASSALIGN16_NONWIN
 #else
-    #define _MEM_CLASSALIGN16 
+    #define _MEM_CLASSALIGN16
     #define _MEM_CLASSALIGN16_NONWIN __attribute__((aligned(16)))
     inline void* _aligned_malloc(size_t size, size_t alignment){
         void* mem=NULL;
-        ADLASSERT(posix_memalign(&mem,alignment,size)==0);
+        posix_memalign(&mem,alignment,size);
         return mem;
     }
     inline void _aligned_free(void* p){
@@ -51,7 +51,7 @@ subject to the following restrictions:
 	void* operator new[](size_t size) { return _aligned_malloc( size, 16 ); } \
 	void operator delete[](void *p) { _aligned_free( p ); } \
 	void* operator new(size_t size, void* p) { return p; } \
-	void operator delete(void *p, void* pp) {} 
+	void operator delete(void *p, void* pp) {}
 
 
 

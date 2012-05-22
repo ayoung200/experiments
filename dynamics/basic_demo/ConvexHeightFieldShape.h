@@ -1,10 +1,10 @@
 /*
-Copyright (c) 2012 Advanced Micro Devices, Inc.  
+Copyright (c) 2012 Advanced Micro Devices, Inc.
 
 This software is provided 'as-is', without any express or implied warranty.
 In no event will the authors be held liable for any damages arising from the use of this software.
-Permission is granted to anyone to use this software for any purpose, 
-including commercial applications, and to alter it and redistribute it freely, 
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it freely,
 subject to the following restrictions:
 
 1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
@@ -16,6 +16,8 @@ subject to the following restrictions:
 #ifndef CONVEX_HEIGHT_FIELD_SHAPE_H
 #define CONVEX_HEIGHT_FIELD_SHAPE_H
 
+#undef ADLASSERT
+#define ADLASSERT(a) (a)
 #include "Stubs/AdlQuaternion.h"
 #include "Stubs/AdlCollisionShape.h"
 #include "Stubs/AdlAabb.h"
@@ -26,7 +28,7 @@ class ConvexHeightField : public CollisionShape
 	public:
 		enum
 		{
-			HEIGHT_RES = 4, //keep this in sync with ChNarrowphaseKernels.cl The value was 4 originally, 
+			HEIGHT_RES = 4, //keep this in sync with ChNarrowphaseKernels.cl The value was 4 originally,
 		};
 		enum Face
 		{
@@ -70,7 +72,7 @@ class ConvexHeightField : public CollisionShape
 		void calcSamplePoints(float4* points) const;
 		float4 calcSamplePoint(int sIdx) const;
 		const float4* getSamplePoints() const;
-		
+
 		int getNumSamplePoints() const;
 
 		//void displaySamples(const float4& translation, const Quaternion& quaternion) const;

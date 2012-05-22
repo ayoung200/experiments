@@ -1,10 +1,10 @@
 /*
-Copyright (c) 2012 Advanced Micro Devices, Inc.  
+Copyright (c) 2012 Advanced Micro Devices, Inc.
 
 This software is provided 'as-is', without any express or implied warranty.
 In no event will the authors be held liable for any damages arising from the use of this software.
-Permission is granted to anyone to use this software for any purpose, 
-including commercial applications, and to alter it and redistribute it freely, 
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it freely,
 subject to the following restrictions:
 
 1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
@@ -30,12 +30,6 @@ subject to the following restrictions:
 #define MAX_CONVEX_SHAPES_CL 8192
 #define MAX_BROADPHASE_COLLISION_CL (MAX_CONVEX_BODIES_CL*MAX_PAIRS_PER_BODY_CL)
 */
-
-namespace adl
-{
-	struct DeviceCL;
-};
-
 
 struct	CustomDispatchData;
 
@@ -63,7 +57,7 @@ protected:
 
 public:
 
-	
+
 
 
 	btGpuNarrowphaseAndSolver(cl_context vtx, cl_device_id dev, cl_command_queue q);
@@ -73,7 +67,7 @@ public:
 	int registerShape(class ConvexHeightField* convexShape,class btConvexUtility* convexPtr);
 	int registerRigidBody(int shapeIndex, float mass, const float* position, const float* orientation, bool writeToGpu = true);
 	void	writeAllBodiesToGpu();
-	
+
 	//btBroadphasePair* GetPair(btBroadphasePairArray& pairArray, int idxBodyA, int idxBodyB);
 
 	virtual void computeContactsAndSolver(cl_mem broadphasePairs, int numBroadphasePairs);

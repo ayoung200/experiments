@@ -34,7 +34,7 @@ extern int gpuBatchContacts;
 #include "../../rendering/GlutGlewWindows/btGlutInclude.h"
 #include "../opengl_interop/btStopwatch.h"
 #include "../../dynamics/basic_demo/ConvexHeightFieldShape.h"
-#include "../../dynamics/basic_demo/Stubs/AdlRigidBody.h"
+//#include "../../dynamics/basic_demo/Stubs/AdlRigidBody.h"
 
 #include "btGpuNarrowPhaseAndSolver.h"
 
@@ -49,6 +49,8 @@ static float angle(0);
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <string.h>
 #endif
 
 #include <stdlib.h>
@@ -136,9 +138,9 @@ cl_kernel g_integrateTransformsKernel;
 
 
 ////for Adl
-#include <Adl/Adl.h>
+//#include <Adl/Adl.h>
 
-adl::DeviceCL* g_deviceCL=0;
+//adl::DeviceCL* g_deviceCL=0;
 
 
 
