@@ -135,104 +135,103 @@ void btParticleSystem::computeParticles()
 	//broadphasePairsGPU.setFromOpenCLBuffer(broadphasePairs,numBroadphasePairs);
 	{
 	    BT_PROFILE("btParticleSystem::forceComputation");
+        {
 
-				{
+            //btOpenCLArray<RigidBodyBase::Body>* bodyNative = btOpenCLArrayUtils::map<adl::TYPE_CL, true>( data->m_device, bodyBuf );
+            //btOpenCLArray<Contact4>* contactNative = btOpenCLArrayUtils::map<adl::TYPE_CL, true>( data->m_device, contactsIn );
 
-					//btOpenCLArray<RigidBodyBase::Body>* bodyNative = btOpenCLArrayUtils::map<adl::TYPE_CL, true>( data->m_device, bodyBuf );
-					//btOpenCLArray<Contact4>* contactNative = btOpenCLArrayUtils::map<adl::TYPE_CL, true>( data->m_device, contactsIn );
+            const int sortAlignment = 512; // todo. get this out of sort
 
-					const int sortAlignment = 512; // todo. get this out of sort
+            int sortSize = NEXTMULTIPLEOF( nParticles, sortAlignment );
 
-                    int sortSize = NEXTMULTIPLEOF( nParticles, sortAlignment );
+            btOpenCLArray<u32>* countsNative = m_internalData->m_solverGPU->m_numConstraints;
+            btOpenCLArray<u32>* offsetsNative = m_internalData->m_solverGPU->m_offsets;
 
-					btOpenCLArray<u32>* countsNative = m_internalData->m_solverGPU->m_numConstraints;
-					btOpenCLArray<u32>* offsetsNative = m_internalData->m_solverGPU->m_offsets;
+                {	//	2. set cell idx
+                    BT_PROFILE("GPU set cell idx");
+                    struct CB
+                    {
+                        int m_nContacts;
+                        int m_staticIdx;
+                        float m_scale;
+                        int m_nSplit;
+                    };
 
-						{	//	2. set cell idx
-							BT_PROFILE("GPU set cell idx");
-							struct CB
-							{
-								int m_nContacts;
-								int m_staticIdx;
-								float m_scale;
-								int m_nSplit;
-							};
+                    ADLASSERT( sortSize%64 == 0 );
+                    CB cdata;
+                    cdata.m_nContacts = nContacts;
+                    cdata.m_staticIdx = csCfg.m_staticIdx;
+                    cdata.m_scale = 1.f/(BT_SOLVER_N_OBJ_PER_SPLIT*csCfg.m_averageExtent);
+                    cdata.m_nSplit = BT_SOLVER_N_SPLIT;
 
-							ADLASSERT( sortSize%64 == 0 );
-							CB cdata;
-							cdata.m_nContacts = nContacts;
-							cdata.m_staticIdx = csCfg.m_staticIdx;
-							cdata.m_scale = 1.f/(BT_SOLVER_N_OBJ_PER_SPLIT*csCfg.m_averageExtent);
-							cdata.m_nSplit = BT_SOLVER_N_SPLIT;
-
-							m_internalData->m_solverGPU->m_sortDataBuffer->resize(nContacts);
+                    m_internalData->m_solverGPU->m_sortDataBuffer->resize(nContacts);
 
 
-							btBufferInfoCL bInfo[] = { btBufferInfoCL( contactNative->getBufferCL() ), btBufferInfoCL( bodyBuf->getBufferCL()), btBufferInfoCL( m_internalData->m_solverGPU->m_sortDataBuffer->getBufferCL()) };
-							btLauncherCL launcher(m_queue, m_internalData->m_solverGPU->m_setSortDataKernel );
-							launcher.setBuffers( bInfo, sizeof(bInfo)/sizeof(btBufferInfoCL) );
-							launcher.setConst( cdata );
-							launcher.launch1D( sortSize, 64 );
-						}
-						bool gpuRadixSort=true;
-						if (gpuRadixSort)
-						{	//	3. sort by cell idx
-							BT_PROFILE("gpuRadixSort");
-							int n = BT_SOLVER_N_SPLIT*BT_SOLVER_N_SPLIT;
-							int sortBit = 32;
-							//if( n <= 0xffff ) sortBit = 16;
-							//if( n <= 0xff ) sortBit = 8;
-							//adl::RadixSort<adl::TYPE_CL>::execute( data->m_sort, *data->m_sortDataBuffer, sortSize );
-							//adl::RadixSort32<adl::TYPE_CL>::execute( data->m_sort32, *data->m_sortDataBuffer, sortSize );
-							btOpenCLArray<btSortData>& keyValuesInOut = *(m_internalData->m_solverGPU->m_sortDataBuffer);
-							this->m_internalData->m_solverGPU->m_sort32->execute(keyValuesInOut);
+                    btBufferInfoCL bInfo[] = { btBufferInfoCL( contactNative->getBufferCL() ), btBufferInfoCL( bodyBuf->getBufferCL()), btBufferInfoCL( m_internalData->m_solverGPU->m_sortDataBuffer->getBufferCL()) };
+                    btLauncherCL launcher(m_queue, m_internalData->m_solverGPU->m_setSortDataKernel );
+                    launcher.setBuffers( bInfo, sizeof(bInfo)/sizeof(btBufferInfoCL) );
+                    launcher.setConst( cdata );
+                    launcher.launch1D( sortSize, 64 );
+                }
+                bool gpuRadixSort=true;
+                if (gpuRadixSort)
+                {	//	3. sort by cell idx
+                    BT_PROFILE("gpuRadixSort");
+                    int n = BT_SOLVER_N_SPLIT*BT_SOLVER_N_SPLIT;
+                    int sortBit = 32;
+                    //if( n <= 0xffff ) sortBit = 16;
+                    //if( n <= 0xff ) sortBit = 8;
+                    //adl::RadixSort<adl::TYPE_CL>::execute( data->m_sort, *data->m_sortDataBuffer, sortSize );
+                    //adl::RadixSort32<adl::TYPE_CL>::execute( data->m_sort32, *data->m_sortDataBuffer, sortSize );
+                    btOpenCLArray<btSortData>& keyValuesInOut = *(m_internalData->m_solverGPU->m_sortDataBuffer);
+                    this->m_internalData->m_solverGPU->m_sort32->execute(keyValuesInOut);
 
-							/*btAlignedObjectArray<btSortData> hostValues;
-							keyValuesInOut.copyToHost(hostValues);
-							printf("hostValues.size=%d\n",hostValues.size());
-							*/
+                    /*btAlignedObjectArray<btSortData> hostValues;
+                    keyValuesInOut.copyToHost(hostValues);
+                    printf("hostValues.size=%d\n",hostValues.size());
+                    */
 
-						}
-
+                }
 
 
 
-						{
-							//	4. find entries
-							BT_PROFILE("gpuBoundSearch");
 
-							m_internalData->m_solverGPU->m_search->execute(*m_internalData->m_solverGPU->m_sortDataBuffer,nContacts,*countsNative,
-								BT_SOLVER_N_SPLIT*BT_SOLVER_N_SPLIT,btBoundSearchCL::COUNT);
+                {
+                    //	4. find entries
+                    BT_PROFILE("gpuBoundSearch");
 
-
-							//adl::BoundSearch<adl::TYPE_CL>::execute( data->m_search, *data->m_sortDataBuffer, nContacts, *countsNative,
-							//	BT_SOLVER_N_SPLIT*BT_SOLVER_N_SPLIT, adl::BoundSearchBase::COUNT );
-
-							//unsigned int sum;
-							m_internalData->m_solverGPU->m_scan->execute(*countsNative,*offsetsNative, BT_SOLVER_N_SPLIT*BT_SOLVER_N_SPLIT);//,&sum );
-							//printf("sum = %d\n",sum);
-						}
+                    m_internalData->m_solverGPU->m_search->execute(*m_internalData->m_solverGPU->m_sortDataBuffer,nContacts,*countsNative,
+                        BT_SOLVER_N_SPLIT*BT_SOLVER_N_SPLIT,btBoundSearchCL::COUNT);
 
 
-						{	//	5. sort constraints by cellIdx
-							{
-								BT_PROFILE("gpu m_reorderContactKernel");
+                    //adl::BoundSearch<adl::TYPE_CL>::execute( data->m_search, *data->m_sortDataBuffer, nContacts, *countsNative,
+                    //	BT_SOLVER_N_SPLIT*BT_SOLVER_N_SPLIT, adl::BoundSearchBase::COUNT );
 
-								btInt4 cdata;
-								cdata.x = nContacts;
+                    //unsigned int sum;
+                    m_internalData->m_solverGPU->m_scan->execute(*countsNative,*offsetsNative, BT_SOLVER_N_SPLIT*BT_SOLVER_N_SPLIT);//,&sum );
+                    //printf("sum = %d\n",sum);
+                }
 
-								btBufferInfoCL bInfo[] = { btBufferInfoCL( contactNative->getBufferCL() ), btBufferInfoCL( m_internalData->m_solverGPU->m_contactBuffer->getBufferCL())
-									, btBufferInfoCL( m_internalData->m_solverGPU->m_sortDataBuffer->getBufferCL()) };
-								btLauncherCL launcher(m_queue,m_internalData->m_solverGPU->m_reorderContactKernel);
-								launcher.setBuffers( bInfo, sizeof(bInfo)/sizeof(btBufferInfoCL) );
-								launcher.setConst( cdata );
-								launcher.launch1D( nContacts, 64 );
-							}
-						}
 
-					}
+                {	//	5. sort constraints by cellIdx
+                    {
+                        BT_PROFILE("gpu m_reorderContactKernel");
 
-				}
+                        btInt4 cdata;
+                        cdata.x = nContacts;
+
+                        btBufferInfoCL bInfo[] = { btBufferInfoCL( contactNative->getBufferCL() ), btBufferInfoCL( m_internalData->m_solverGPU->m_contactBuffer->getBufferCL())
+                            , btBufferInfoCL( m_internalData->m_solverGPU->m_sortDataBuffer->getBufferCL()) };
+                        btLauncherCL launcher(m_queue,m_internalData->m_solverGPU->m_reorderContactKernel);
+                        launcher.setBuffers( bInfo, sizeof(bInfo)/sizeof(btBufferInfoCL) );
+                        launcher.setConst( cdata );
+                        launcher.launch1D( nContacts, 64 );
+                    }
+                }
+
+            }
+
+        }
 
 		if (1)
 		{
