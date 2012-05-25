@@ -143,7 +143,7 @@ inline int	btGetVersion()
 #else
 	//non-windows systems
 
-#if (defined (__APPLE__) && defined (__i386__) && (!defined (BT_USE_DOUBLE_PRECISION)))
+#if ((defined (__APPLE__) && defined (__i386__))||defined(__linux__) && (!defined (BT_USE_DOUBLE_PRECISION)))
 	#define BT_USE_SSE
 	#include <emmintrin.h>
 

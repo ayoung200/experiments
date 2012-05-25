@@ -32,12 +32,13 @@ subject to the following restrictions:
 */
 
 struct	CustomDispatchData;
-struct  ParticleSystemParams
+ATTRIBUTE_ALIGNED16(struct)  ParticleSystemParams
 {
     uint32 maxParticles;
 }
 
 #include "../basic_initialize/btOpenCLInclude.h"
+#include "../../bullet2/LinearMath/btAlignedObjectArray.h"
 
 /*enum
 {

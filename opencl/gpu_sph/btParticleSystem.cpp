@@ -23,17 +23,20 @@ subject to the following restrictions:
 #include "btConvexUtility.h"
 #include "../gpu_rigidbody_pipeline2/ConvexHullContact.h"
 
-struct btParticle
+ATTRIBUTE_ALIGNED16(struct) btParticle
 {
+    BT_DECLARE_ALIGNED_ALLOCATOR();
+
     float4 position;
     float4 color;
     float3 velocity;
     float mass;
     float lifetime;
-}
+};
 struct	CustomDispatchData
 {
     //should also allow for DirectX?
+    unsigned int m_numParticles;
     GLuint m_particlesVBO;
     btOpenCLGLInteropBuffer<btParticle>* m_particlesGL;
     btOpenCLArray<btParticle> m_particles;
@@ -64,419 +67,74 @@ struct	CustomDispatchData
         {
             m_internalData->m_particles = new btOpenCLArray<btParticle>(ctx,q,param.maxParticles,false);
         }
+        m_internalData->m_numParticles=0;
 	}
-	virtual ~btParticleSystem(void);
+	virtual ~btParticleSystem(void)
+	{
+	    if(m_internalData)
+        {
+            delete m_internalData->m_particles;
+            delete m_internalData->m_particlesGL;
+            glDeleteBuffers(1,&m_particlesVBO);
+            delete m_internalData;
+        }
+
+	}
 	void	writeAllParticlesToGpu();
 	virtual void computeCollisions();
-	cl_mem	getParticlesGpu();
-	cl_mem	getParticlesInertiasGpu();
+	cl_mem	getParticlesGpu()
+    {
+        if(useCLGLInterop)
+            return (cl_mem)m_internalData->m_particlesGL->getCLBuffer();
+        else
+            return (cl_mem)m_internalData->m_particles->getBufferCL();
+    }
+    GLuint	getParticlesGL()
+    {
+        return m_particlesVBO;
+    }
+    void btPushParticles(btAlignedObjectArray<btParticle>& pArray, bool blocking)
+    {
+        cl_mem buf;
+        if(useCLGLInterop)
+        {
+            buf = (cl_mem)m_internalData->m_particlesGL->getCLBuffer();
+            ciErrNum = clEnqueueAcquireGLObjects(m_queue, 1, &buf, 0, 0, NULL);
+            clFinish(m_queue);
+        }
+        else
+        {
+            buf = (cl_mem)m_internalData->m_particles->getBufferCL();
+        }
+        ciErrNum = clEnqueueWriteBuffer (	m_queue,
+                buf,
+ 				blocking,
+ 				0,
+ 				pArray->size()*sizeof(btParticle),
+ 				&pArray[0],0,0,0
+			);
+        clFinish(m_queue);
+        m_internalData->m_numParticles+=pArray.size();
+    }
 
-btGpuNarrowphaseAndSolver::btGpuNarrowphaseAndSolver(cl_context ctx, cl_device_id device, cl_command_queue queue)
-	:m_internalData(0) ,m_planeBodyIndex(-1),
-	m_context(ctx),
-	m_device(device),
-	m_queue(queue)
+void btParticleSystem::computeParticles()
 {
-
-	m_internalData = new CustomDispatchData();
-	memset(m_internalData,0,sizeof(CustomDispatchData));
-
-
-	m_internalData->m_gpuSatCollision = new GpuSatCollision(ctx,device,queue);
-	m_internalData->m_pBufPairsCPU = new btAlignedObjectArray<int2>;
-	m_internalData->m_pBufPairsCPU->resize(MAX_BROADPHASE_COLLISION_CL);
-
-	m_internalData->m_convexPairsOutGPU = new btOpenCLArray<int2>(ctx,queue,MAX_BROADPHASE_COLLISION_CL,false);
-	m_internalData->m_planePairs = new btOpenCLArray<int2>(ctx,queue,MAX_BROADPHASE_COLLISION_CL,false);
-
-	m_internalData->m_pBufContactOutCPU = new btAlignedObjectArray<Contact4>();
-	m_internalData->m_pBufContactOutCPU->resize(MAX_BROADPHASE_COLLISION_CL);
-	m_internalData->m_bodyBufferCPU = new btAlignedObjectArray<RigidBodyBase::Body>();
-	m_internalData->m_bodyBufferCPU->resize(MAX_CONVEX_BODIES_CL);
-
-	m_internalData->m_inertiaBufferCPU = new btAlignedObjectArray<RigidBodyBase::Inertia>();
-	m_internalData->m_inertiaBufferCPU->resize(MAX_CONVEX_BODIES_CL);
-
-	m_internalData->m_pBufContactOutGPU = new btOpenCLArray<Contact4>(ctx,queue, MAX_BROADPHASE_COLLISION_CL,false);
-	m_internalData->m_inertiaBufferGPU = new btOpenCLArray<RigidBodyBase::Inertia>(ctx,queue,MAX_CONVEX_BODIES_CL,false);
-
-	m_internalData->m_solverGPU = new Solver(ctx,device,queue,MAX_BROADPHASE_COLLISION_CL);
-
-	//m_internalData->m_solverDataGPU = adl::Solver<adl::TYPE_CL>::allocate(ctx,queue, MAX_BROADPHASE_COLLISION_CL,false);
-	m_internalData->m_bodyBufferGPU = new btOpenCLArray<RigidBodyBase::Body>(ctx,queue, MAX_CONVEX_BODIES_CL,false);
-	m_internalData->m_narrowPhase = new ChNarrowphase(ctx,device,queue);
-
-	//m_internalData->m_Data = adl::ChNarrowphase<adl::TYPE_CL>::allocate(m_internalData->m_deviceCL);
-//		m_internalData->m_DataCPU = adl::ChNarrowphase<adl::TYPE_HOST>::allocate(m_internalData->m_deviceHost);
-
-	m_internalData->m_ShapeBuffer =  new btOpenCLArray<ChNarrowphase::ShapeData>( ctx,queue, MAX_CONVEX_SHAPES_CL,false);
-
-	m_internalData->m_shapePointers = new btAlignedObjectArray<ConvexHeightField*>();
-	m_internalData->m_convexData = new btAlignedObjectArray<btConvexUtility* >();
-	m_internalData->m_convexPolyhedra = new btAlignedObjectArray<ConvexPolyhedronCL>();
-
-	m_internalData->m_shapePointers->resize(MAX_CONVEX_SHAPES_CL);
-	m_internalData->m_convexData->resize(MAX_CONVEX_SHAPES_CL);
-	m_internalData->m_convexPolyhedra->resize(MAX_CONVEX_SHAPES_CL);
-
-	m_internalData->m_numAcceleratedShapes = 0;
-	m_internalData->m_numAcceleratedRigidBodies = 0;
-
-	m_internalData->m_contactCGPU = new btOpenCLArray<Constraint4>(ctx,queue,MAX_BROADPHASE_COLLISION_CL,false);
-	//m_internalData->m_frictionCGPU = new btOpenCLArray<adl::Solver<adl::TYPE_CL>::allocateFrictionConstraint( m_internalData->m_deviceCL, MAX_BROADPHASE_COLLISION_CL);
-
-}
-
-int btGpuNarrowphaseAndSolver::registerShape(ConvexHeightField* convexShape,btConvexUtility* convexPtr)
-{
-	m_internalData->m_shapePointers->resize(m_internalData->m_numAcceleratedShapes+1);
-	m_internalData->m_convexData->resize(m_internalData->m_numAcceleratedShapes+1);
-	m_internalData->m_ShapeBuffer->resize(m_internalData->m_numAcceleratedShapes+1);
-	m_internalData->m_convexPolyhedra->resize(m_internalData->m_numAcceleratedShapes+1);
-
-
-	ConvexPolyhedronCL& convex = m_internalData->m_convexPolyhedra->at(m_internalData->m_convexPolyhedra->size()-1);
-	convex.mC = convexPtr->mC;
-	convex.mE = convexPtr->mE;
-	convex.m_extents= convexPtr->m_extents;
-	convex.m_localCenter = convexPtr->m_localCenter;
-	convex.m_radius = convexPtr->m_radius;
-
-	convex.m_numUniqueEdges = convexPtr->m_uniqueEdges.size();
-	int edgeOffset = m_internalData->m_uniqueEdges.size();
-	convex.m_uniqueEdgesOffset = edgeOffset;
-
-	m_internalData->m_uniqueEdges.resize(edgeOffset+convex.m_numUniqueEdges);
-
-	//convex data here
-	int i;
-	for ( i=0;i<convexPtr->m_uniqueEdges.size();i++)
-	{
-		m_internalData->m_uniqueEdges[edgeOffset+i] = convexPtr->m_uniqueEdges[i];
-	}
-
-	int faceOffset = m_internalData->m_convexFaces.size();
-	convex.m_faceOffset = faceOffset;
-	convex.m_numFaces = convexPtr->m_faces.size();
-	m_internalData->m_convexFaces.resize(faceOffset+convex.m_numFaces);
-	for (i=0;i<convexPtr->m_faces.size();i++)
-	{
-		m_internalData->m_convexFaces[convex.m_faceOffset+i].m_plane.x = convexPtr->m_faces[i].m_plane[0];
-		m_internalData->m_convexFaces[convex.m_faceOffset+i].m_plane.y = convexPtr->m_faces[i].m_plane[1];
-		m_internalData->m_convexFaces[convex.m_faceOffset+i].m_plane.z = convexPtr->m_faces[i].m_plane[2];
-		m_internalData->m_convexFaces[convex.m_faceOffset+i].m_plane.w = convexPtr->m_faces[i].m_plane[3];
-		int indexOffset = m_internalData->m_convexIndices.size();
-		int numIndices = convexPtr->m_faces[i].m_indices.size();
-		m_internalData->m_convexFaces[convex.m_faceOffset+i].m_numIndices = numIndices;
-		m_internalData->m_convexFaces[convex.m_faceOffset+i].m_indexOffset = indexOffset;
-		m_internalData->m_convexIndices.resize(indexOffset+numIndices);
-		for (int p=0;p<numIndices;p++)
-		{
-			m_internalData->m_convexIndices[indexOffset+p] = convexPtr->m_faces[i].m_indices[p];
-		}
-	}
-
-	convex.m_numVertices = convexPtr->m_vertices.size();
-	int vertexOffset = m_internalData->m_convexVertices.size();
-	convex.m_vertexOffset =vertexOffset;
-	m_internalData->m_convexVertices.resize(vertexOffset+convex.m_numVertices);
-	for (int i=0;i<convexPtr->m_vertices.size();i++)
-	{
-		m_internalData->m_convexVertices[vertexOffset+i] = convexPtr->m_vertices[i];
-	}
-
-	(*m_internalData->m_shapePointers)[m_internalData->m_numAcceleratedShapes] = convexShape;
-	(*m_internalData->m_convexData)[m_internalData->m_numAcceleratedShapes] = convexPtr;
-	m_internalData->m_narrowPhase->setShape(m_internalData->m_ShapeBuffer, convexShape, m_internalData->m_numAcceleratedShapes, 0.01f);
-
-	return m_internalData->m_numAcceleratedShapes++;
-}
-
-cl_mem	btGpuNarrowphaseAndSolver::getBodiesGpu()
-{
-	return (cl_mem)m_internalData->m_bodyBufferGPU->getBufferCL();
-}
-
-cl_mem	btGpuNarrowphaseAndSolver::getBodyInertiasGpu()
-{
-	return (cl_mem)m_internalData->m_inertiaBufferGPU->getBufferCL();
-}
-
-
-int btGpuNarrowphaseAndSolver::registerRigidBody(int shapeIndex, float mass, const float* position, const float* orientation , bool writeToGpu)
-{
-	assert(m_internalData->m_numAcceleratedRigidBodies< (MAX_CONVEX_BODIES_CL-1));
-
-	m_internalData->m_bodyBufferGPU->resize(m_internalData->m_numAcceleratedRigidBodies+1);
-
-	RigidBodyBase::Body& body = m_internalData->m_bodyBufferCPU->at(m_internalData->m_numAcceleratedRigidBodies);
-
-	float friction = 1.f;
-	float restitution = 0.f;
-
-	body.m_frictionCoeff = friction;
-	body.m_restituitionCoeff = restitution;
-	body.m_angVel = make_float4(0.f);
-	body.m_linVel = make_float4(0.f);
-	body.m_pos = make_float4(position[0],position[1],position[2],0.f);
-	body.m_quat = make_float4(orientation[0],orientation[1],orientation[2],orientation[3]);
-	body.m_shapeIdx = shapeIndex;
-	if (shapeIndex<0)
-	{
-		body.m_shapeType = CollisionShape::SHAPE_PLANE;
-		m_planeBodyIndex = m_internalData->m_numAcceleratedRigidBodies;
-	} else
-	{
-		body.m_shapeType = CollisionShape::SHAPE_CONVEX_HEIGHT_FIELD;
-	}
-
-	body.m_invMass = mass? 1.f/mass : 0.f;
-
-	if (writeToGpu)
-	{
-		m_internalData->m_bodyBufferGPU->copyFromHostPointer(&body,1,m_internalData->m_numAcceleratedRigidBodies);
-	}
-
-	RigidBodyBase::Inertia& shapeInfo = m_internalData->m_inertiaBufferCPU->at(m_internalData->m_numAcceleratedRigidBodies);
-
-	if (mass==0.f)
-	{
-		shapeInfo.m_initInvInertia = mtZero();
-		shapeInfo.m_invInertia = mtZero();
-	} else
-	{
-
-		assert(body.m_shapeIdx>=0);
-
-		//approximate using the aabb of the shape
-
-		Aabb aabb = (*m_internalData->m_shapePointers)[shapeIndex]->m_aabb;
-		float4 halfExtents = (aabb.m_max - aabb.m_min);
-
-		float4 localInertia;
-
-		float lx=2.f*halfExtents.x;
-		float ly=2.f*halfExtents.y;
-		float lz=2.f*halfExtents.z;
-
-		localInertia = make_float4( (mass/12.0f) * (ly*ly + lz*lz),
-			(mass/12.0f) * (lx*lx + lz*lz),
-			(mass/12.0f) * (lx*lx + ly*ly));
-
-		float4 invLocalInertia;
-		invLocalInertia.x = 1.f/localInertia.x;
-		invLocalInertia.y = 1.f/localInertia.y;
-		invLocalInertia.z = 1.f/localInertia.z;
-		invLocalInertia.w = 0.f;
-
-		shapeInfo.m_initInvInertia = mtZero();
-		shapeInfo.m_initInvInertia.m_row[0].x = invLocalInertia.x;
-		shapeInfo.m_initInvInertia.m_row[1].y = invLocalInertia.y;
-		shapeInfo.m_initInvInertia.m_row[2].z = invLocalInertia.z;
-
-		Matrix3x3 m = qtGetRotationMatrix( body.m_quat);
-		Matrix3x3 mT = mtTranspose( m );
-		shapeInfo.m_invInertia = mtMul( mtMul( m, shapeInfo.m_initInvInertia ), mT );
-
-	}
-
-	if (writeToGpu)
-		m_internalData->m_inertiaBufferGPU->copyFromHostPointer(&shapeInfo,1,m_internalData->m_numAcceleratedRigidBodies);
-
-
-
-	return m_internalData->m_numAcceleratedRigidBodies++;
-}
-
-void	btGpuNarrowphaseAndSolver::writeAllBodiesToGpu()
-{
-	m_internalData->m_bodyBufferGPU->resize(m_internalData->m_numAcceleratedRigidBodies);
-	m_internalData->m_inertiaBufferGPU->resize(m_internalData->m_numAcceleratedRigidBodies);
-
-	m_internalData->m_bodyBufferGPU->copyFromHostPointer(&m_internalData->m_bodyBufferCPU->at(0),m_internalData->m_numAcceleratedRigidBodies);
-	m_internalData->m_inertiaBufferGPU->copyFromHostPointer(&m_internalData->m_inertiaBufferCPU->at(0),m_internalData->m_numAcceleratedRigidBodies);
-}
-
-
-
-btGpuNarrowphaseAndSolver::~btGpuNarrowphaseAndSolver(void)
-{
-	if (m_internalData)
-	{
-		delete m_internalData->m_pBufPairsCPU;
-		delete m_internalData->m_convexPairsOutGPU;
-		delete m_internalData->m_planePairs;
-		delete m_internalData->m_pBufContactOutGPU;
-		delete m_internalData->m_inertiaBufferGPU;
-		delete m_internalData->m_pBufContactOutCPU;
-		delete m_internalData->m_shapePointers;
-		delete m_internalData->m_convexData;
-		delete m_internalData->m_convexPolyhedra;
-		delete m_internalData->m_ShapeBuffer;
-		delete m_internalData->m_inertiaBufferCPU;
-		delete m_internalData->m_contactCGPU;
-		delete m_internalData->m_bodyBufferGPU;
-		delete m_internalData->m_solverGPU;
-		delete m_internalData->m_bodyBufferCPU;
-		delete m_internalData->m_narrowPhase;
-		delete m_internalData->m_gpuSatCollision;
-		delete m_internalData;
-
-	}
-
-}
-
-
-
-void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs, int numBroadphasePairs)
-{
-
-
-	BT_PROFILE("computeContactsAndSolver");
+	BT_PROFILE("computeParticles");
 	bool bGPU = (m_internalData != 0);
-	int maxBodyIndex = m_internalData->m_numAcceleratedRigidBodies;
+	int maxParticleIndex = m_internalData->m_numParticles;
 
-	if (!maxBodyIndex)
+	if (!maxParticleIndex)
 		return;
-	int numOfConvexRBodies = maxBodyIndex;
-
-	ChNarrowphaseBase::Config cfgNP;
-	cfgNP.m_collisionMargin = 0.01f;
-	int nContactOut = 0;
+	//ChNarrowphaseBase::Config cfgNP;
+	//cfgNP.m_collisionMargin = 0.01f;
+	//int nContactOut = 0;
 	//printf("convexPairsOut.m_size = %d\n",m_internalData->m_convexPairsOutGPU->m_size);
 
 
-	btOpenCLArray<int2> broadphasePairsGPU(m_context,m_queue);
-	broadphasePairsGPU.setFromOpenCLBuffer(broadphasePairs,numBroadphasePairs);
-
-	bool useCulling = true;
-	if (useCulling)
+	//btOpenCLArray<int2> broadphasePairsGPU(m_context,m_queue);
+	//broadphasePairsGPU.setFromOpenCLBuffer(broadphasePairs,numBroadphasePairs);
 	{
-		BT_PROFILE("ChNarrowphase::culling");
-		clFinish(m_queue);
-
-		numPairsTotal = numBroadphasePairs;
-		numPairsOut = m_internalData->m_narrowPhase->culling(
-			&broadphasePairsGPU,
-			numBroadphasePairs,
-			m_internalData->m_bodyBufferGPU, m_internalData->m_ShapeBuffer,
-			m_internalData->m_convexPairsOutGPU,
-			cfgNP);
-	}
-	{
-			if (m_planeBodyIndex>=0)
-			{
-				BT_PROFILE("ChNarrowphase:: plane versus convex");
-				//todo: get rid of this dynamic allocation
-				int2* hostPairs = new int2[m_internalData->m_numAcceleratedRigidBodies-1];
-				int index=0;
-				for (int i=0;i<m_internalData->m_numAcceleratedRigidBodies;i++)
-				{
-					if (i!=m_planeBodyIndex)
-					{
-						hostPairs[index].x = m_planeBodyIndex;
-						hostPairs[index].y = i;
-						index++;
-					}
-				}
-				assert(m_internalData->m_numAcceleratedRigidBodies-1 == index);
-				m_internalData->m_planePairs->copyFromHostPointer(hostPairs,index);
-				clFinish(m_queue);
-
-				delete[]hostPairs;
-				//convex versus plane
-				m_internalData->m_narrowPhase->execute(m_internalData->m_planePairs, index, m_internalData->m_bodyBufferGPU, m_internalData->m_ShapeBuffer,
-					0,0,m_internalData->m_pBufContactOutGPU, nContactOut, cfgNP);
-			}
-	}
-	{
-		BT_PROFILE("ChNarrowphase::execute");
-		if (useCulling)
-		{
-			//convex versus convex
-			//m_internalData->m_narrowPhase->execute(m_internalData->m_convexPairsOutGPU,numPairsOut, m_internalData->m_bodyBufferGPU, m_internalData->m_ShapeBuffer, m_internalData->m_pBufContactOutGPU, nContactOut, cfgNP);
-#define USE_CONVEX_CONVEX_HOST 1
-#ifdef USE_CONVEX_CONVEX_HOST
-			m_internalData->m_convexPairsOutGPU->resize(numPairsOut);
-			m_internalData->m_pBufContactOutGPU->resize(nContactOut);
-
-
-			m_internalData->m_gpuSatCollision->computeConvexConvexContactsHost(
-				m_internalData->m_convexPairsOutGPU,
-				numPairsOut,
-				m_internalData->m_bodyBufferGPU,
-				m_internalData->m_ShapeBuffer,
-				m_internalData->m_pBufContactOutGPU,
-				nContactOut, cfgNP, m_internalData->m_convexPolyhedra,m_internalData->m_convexVertices,m_internalData->m_uniqueEdges,
-				m_internalData->m_convexFaces,m_internalData->m_convexIndices);
-#else
-
-			m_internalData->m_narrowPhase->execute(
-				m_internalData->m_convexPairsOutGPU,
-				numPairsOut,
-				m_internalData->m_bodyBufferGPU,
-				m_internalData->m_ShapeBuffer,
-				m_internalData->m_pBufContactOutGPU,
-				nContactOut, cfgNP);
-#endif
-
-
-		} else
-		{
-			m_internalData->m_narrowPhase->execute(&broadphasePairsGPU, numBroadphasePairs, m_internalData->m_bodyBufferGPU, m_internalData->m_ShapeBuffer, m_internalData->m_pBufContactOutGPU, nContactOut, cfgNP);
-		}
-
-		clFinish(m_queue);
-	}
-
-	if (!nContactOut)
-		return;
-
-	bool useSolver = true;//true;//false;
-
-	if (useSolver)
-	{
-		float dt=1./60.;
-		SolverBase::ConstraintCfg csCfg( dt );
-		csCfg.m_enableParallelSolve = true;
-		csCfg.m_averageExtent = 0.2f;//@TODO m_averageObjExtent;
-		csCfg.m_staticIdx = m_planeBodyIndex;
-
-		bool exposeInternalBatchImplementation=true;
-
-		adl::Solver<adl::TYPE_HOST>::Data* cpuSolverData = 0;
-		if (exposeInternalBatchImplementation)
-		{
-			BT_PROFILE("Batching");
-
-		btOpenCLArray<Contact4>* contactsIn = m_internalData->m_pBufContactOutGPU;
-		const btOpenCLArray<RigidBodyBase::Body>* bodyBuf = m_internalData->m_bodyBufferGPU;
-		void* additionalData = m_internalData->m_frictionCGPU;
-		const btOpenCLArray<RigidBodyBase::Inertia>* shapeBuf = m_internalData->m_inertiaBufferGPU;
-		SolverData contactCOut = m_internalData->m_contactCGPU;
-		int nContacts = nContactOut;
-
-		bool useCPU=false;
-
-		{
-			BT_PROFILE("GPU batch");
-
-			{
-				//@todo: just reserve it, without copy of original contact (unless we use warmstarting)
-				if( m_internalData->m_solverGPU->m_contactBuffer)
-				{
-					m_internalData->m_solverGPU->m_contactBuffer->resize(nContacts);
-				}
-
-				if( m_internalData->m_solverGPU->m_contactBuffer == 0 )
-				{
-					m_internalData->m_solverGPU->m_contactBuffer = new btOpenCLArray<Contact4>(m_context,m_queue, nContacts );
-					m_internalData->m_solverGPU->m_contactBuffer->resize(nContacts);
-				}
-
-				btOpenCLArray<Contact4>* contactNative  = contactsIn;
-				const btOpenCLArray<RigidBodyBase::Body>* bodyNative = bodyBuf;
-
+	    BT_PROFILE("btParticleSystem::forceComputation");
 
 				{
 
@@ -484,14 +142,11 @@ void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs,
 					//btOpenCLArray<Contact4>* contactNative = btOpenCLArrayUtils::map<adl::TYPE_CL, true>( data->m_device, contactsIn );
 
 					const int sortAlignment = 512; // todo. get this out of sort
-					if( csCfg.m_enableParallelSolve )
-					{
 
+                    int sortSize = NEXTMULTIPLEOF( nParticles, sortAlignment );
 
-						int sortSize = NEXTMULTIPLEOF( nContacts, sortAlignment );
-
-						btOpenCLArray<u32>* countsNative = m_internalData->m_solverGPU->m_numConstraints;
-						btOpenCLArray<u32>* offsetsNative = m_internalData->m_solverGPU->m_offsets;
+					btOpenCLArray<u32>* countsNative = m_internalData->m_solverGPU->m_numConstraints;
+					btOpenCLArray<u32>* offsetsNative = m_internalData->m_solverGPU->m_offsets;
 
 						{	//	2. set cell idx
 							BT_PROFILE("GPU set cell idx");
@@ -579,38 +234,6 @@ void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs,
 
 				}
 
-				clFinish(m_queue);
-
-				{
-					BT_PROFILE("gpu m_copyConstraintKernel");
-
-					btInt4 cdata; cdata.x = nContacts;
-					btBufferInfoCL bInfo[] = { btBufferInfoCL(  m_internalData->m_solverGPU->m_contactBuffer->getBufferCL() ), btBufferInfoCL( contactNative->getBufferCL() ) };
-					btLauncherCL launcher(m_queue, m_internalData->m_solverGPU->m_copyConstraintKernel );
-					launcher.setBuffers( bInfo, sizeof(bInfo)/sizeof(btBufferInfoCL) );
-					launcher.setConst(  cdata );
-					launcher.launch1D( nContacts, 64 );
-					clFinish(m_queue);
-				}
-
-				bool compareGPU = false;
-				if (gpuBatchContacts)
-				{
-					BT_PROFILE("gpu batchContacts");
-					m_internalData->m_solverGPU->batchContacts( contactNative, nContacts, m_internalData->m_solverGPU->m_numConstraints, m_internalData->m_solverGPU->m_offsets, csCfg.m_staticIdx );
-				}
-
-				if (1)
-				{
-					BT_PROFILE("gpu convertToConstraints");
-					m_internalData->m_solverGPU->convertToConstraints( bodyBuf, shapeBuf, contactNative, contactCOut, additionalData, nContacts, csCfg );
-					clFinish(m_queue);
-				}
-
-			}
-		}
-
-
 		if (1)
 		{
 			BT_PROFILE("GPU solveContactConstraint");
@@ -623,19 +246,5 @@ void btGpuNarrowphaseAndSolver::computeContactsAndSolver(cl_mem broadphasePairs,
 
 			clFinish(m_queue);
 		}
-
-
-#if 0
-		if (0)
-		{
-			BT_PROFILE("read body velocities back to CPU");
-			//read body updated linear/angular velocities back to CPU
-			m_internalData->m_bodyBufferGPU->read(
-				m_internalData->m_bodyBufferCPU->m_ptr,numOfConvexRBodies);
-			adl::DeviceUtils::waitForCompletion( m_internalData->m_deviceCL );
-		}
-#endif
-
 	}
-
 }
