@@ -89,8 +89,9 @@ int testAABBSphereOverlap(float4 min0, float4 max0, float4 center, float r)
     SQ(max(min0.y-center.y,0.0f)+max(max0.y-center.y,0.0f))+
     SQ(max(min0.z-center.z,0.0f)+max(max0.z-center.z,0.0f)))<=SQ(r);
 }
-ATTRIBUTE_ALIGNED16(struct) btParticle;
-void computeInteraction(btParticle* a, btParticle* b);
+struct btParticle;
+struct btParticleParams;
+void computeInteraction(private btParticle* a, __global btParticle* b, __global btParticleParams* pParams);
 
 void forNeighborParticles(int numObjects,
 						int4    gridPos,
@@ -98,7 +99,8 @@ void forNeighborParticles(int numObjects,
 						__global int2*  pHash,
 						__global int*   pCellStart,
 						__global btParticle* particles,
-						__global float4* pParams)
+						private btParticle* a,
+						__global btParticleParams* pParams)
 {
 	int4 pGridDim = *((__global int4*)(pParams + 1));
 	int maxBodiesPerCell = pGridDim.w;
@@ -124,11 +126,7 @@ void forNeighborParticles(int numObjects,
 		int unsorted_indx2 = cellData.y;
         if (unsorted_indx2 < unsorted_indx) // check not colliding with self
         {
-            float d = pCenter[unsorted_indx2]-pCenter[unsorted_indx];
-			if(SQ(d)<)
-			{
-                computeIteraction()
-			}
+			computeIteraction(a,particle[unsorted_indx2],pParams);
 		}
 	}
 	int2 newStartCurr;
@@ -154,7 +152,7 @@ __kernel void kProcessNeighbors(	int numObjects,
     int2 sortedData = pHash[index];
 	int unsorted_indx = sortedData.y;
 
-    btParticle* a = particles[unsorted_indx];
+    private btParticle a = particles[unsorted_indx];
     // get address in grid
     int4 gridPosA = getGridPos(a->position, pParams);
     int4 gridPosB;
@@ -169,7 +167,7 @@ __kernel void kProcessNeighbors(	int numObjects,
             for(int x=-1; x<=1; x++)
             {
 				gridPosB.x = gridPosA.x + x;
-                forNeighbors(numObjects, gridPosB, index, pHash, pCellStart,particles,a, pParams);
+                forNeighbors(numObjects, gridPosB, index, pHash, pCellStart,particles,&a, pParams);
             }
         }
     }

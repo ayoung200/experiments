@@ -535,11 +535,121 @@ cl_program btOpenCLUtils_compileCLProgramFromString(cl_context clContext, cl_dev
 		
 #ifdef _WIN32
 		CreateDirectory("cache",0);
+		{
+			FILETIME modtimeBinary;
+
+			HANDLE binaryFileHandle = CreateFile(binaryFileName,GENERIC_READ,0,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0);
+			if (binaryFileHandle ==INVALID_HANDLE_VALUE)
+			{
+				DWORD errorCode;
+				errorCode = GetLastError();
+				switch (errorCode)
+				{
+				case ERROR_FILE_NOT_FOUND:
+					{
+						printf("\nCached file not found %s\n", binaryFileName);
+						break;
+					}
+				case ERROR_PATH_NOT_FOUND:
+					{
+						printf("\nCached file path not found %s\n", binaryFileName);
+						break;
+					}
+				default:
+					{
+						printf("\nFailed reading cached file with errorCode = %d\n", errorCode);
+					}
+				}
+			} else
+			{
+				if (GetFileTime(binaryFileHandle, NULL, NULL, &modtimeBinary)==0)
+				{
+					DWORD errorCode;
+					errorCode = GetLastError();
+					printf("\nGetFileTime errorCode = %d\n", errorCode);
+				} else
+				{
+					binaryFileValid = 1;
+				}
+				CloseHandle(binaryFileHandle);
+			}
+
+			if (binaryFileValid)
+			{
+				HANDLE srcFileHandle = CreateFile(clFileNameForCaching,GENERIC_READ,0,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0);
+				if (srcFileHandle!=INVALID_HANDLE_VALUE)
+				{
+					FILETIME modtimeSrc; 
+					if (GetFileTime(srcFileHandle, NULL, NULL, &modtimeSrc)==0)
+					{
+						DWORD errorCode;
+						errorCode = GetLastError();
+						printf("\nGetFileTime errorCode = %d\n", errorCode);
+					}
+					if (  ( modtimeSrc.dwHighDateTime < modtimeBinary.dwHighDateTime)
+						||(( modtimeSrc.dwHighDateTime == modtimeBinary.dwHighDateTime)&&(modtimeSrc.dwLowDateTime <= modtimeBinary.dwLowDateTime)))
+					{
+						fileUpToDate=1;
+					} else
+					{
+						printf("\nCached binary file out-of-date (%s)\n",binaryFileName);
+					}
+					CloseHandle(srcFileHandle);
+				} 
+				else
+				{
+#ifdef _DEBUG
+					DWORD errorCode;
+					errorCode = GetLastError();
+					switch (errorCode)
+					{
+					case ERROR_FILE_NOT_FOUND:
+						{
+							printf("\nSrc file not found %s\n", clFileNameForCaching);
+							break;
+						}
+					case ERROR_PATH_NOT_FOUND:
+						{
+							printf("\nSrc path not found %s\n", clFileNameForCaching);
+							break;
+						}
+					default:
+						{
+							printf("\nnSrc file reading errorCode = %d\n", errorCode);
+						}
+					}
+
+					//we should make sure the src file exists so we can verify the timestamp with binary
+					assert(0);
+#else
+					//if we cannot find the source, assume it is OK in release builds
+					fileUpToDate = true;
+#endif
+				}
+			}
+
+
+		}
 #else
 		mkdir("cache", 0777)
+		struct stat st;
+		int ierr = stat (srcFileName, &st);
+		int modtimeBinary=0;
+		if (ierr == 0) {
+			modtimeBinary = st.st_mtime;
+		}
+		else
+			debugPrintf("filetime errcode=%d\n",ierr);
+		ierr = stat (srcFileName, &st);
+		if (ierr == 0) {
+			int modtimeSrc = st.st_mtime;
+			if(modtimeSrc<modtimeBinary)
+			fileUpToDate=true;	
+		}
+		else
+			debugPrintf("filetime errcode=%d\n",ierr);
 #endif
 		
-		fileUpToDate=isFileUpToDate(binaryFileName,clFileNameForCaching);
 		if( fileUpToDate)
 		{
 #ifdef _WIN32
